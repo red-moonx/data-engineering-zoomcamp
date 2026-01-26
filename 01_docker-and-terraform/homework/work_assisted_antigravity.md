@@ -46,6 +46,19 @@ Modified the provided Yellow Taxi script to support the specific homework requir
 ## 8. SQL queries
 - SQL queries executed against the live Postgres database.
 
+## 9. Shut down the environment
+-   Stops the running containers (pgdatabase and pgadmin).
+- Removes the containers entirely.
+- Removes the internal Docker network created for the services.
+- Keeps the data: the database records and pgAdmin settings are preserved because they are stored in Volumes (managed separately by Docker).
+
+```bash
+docker compose down
+```
+- To remove the data as well: add "-v" flag to previous command:
+```bash
+docker compose down -v
+```
 ---
-**Report generated on:** 2026-01-26
-**Current Commit:** `0dd0e2d`
+
+_Report generated on: 📅 **2026-01-26**_
