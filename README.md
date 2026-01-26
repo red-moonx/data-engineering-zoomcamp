@@ -9,42 +9,42 @@ This repository contains my work for the [Data Engineering Zoomcamp](https://git
 The course is composed of the following modules:
 
 ### 🛠️ Module 1: Containerization and Infrastructure as Code
-- Introduction to GCP: Setting up Google Cloud Platform.
-- Docker and Docker Compose: Containerizing applications and infrastructure.
-- PostgreSQL with Docker: Running and managing relational databases.
-- Terraform: Infrastructure setup as code (IaC).
-- Homework: Applying concepts to real-world scenarios.
+- Introduction to GCP
+- Docker and Docker Compose
+- Running PostgreSQL with Docker
+- Infrastructure setup with Terraform
+- Homework
 
 ### 🔄 Module 2: Workflow Orchestration
-- Data Lakes: Understanding cloud storage and data lake concepts.
-- Workflow Orchestration with Kestra: Managing data pipelines and dependencies.
-- Homework: Practical implementation of orchestration flows.
+- Data Lakes and Workflow Orchestration
+- Workflow Orchestration with Kestra
+- Homework
 
 ### 🧪 Workshop 1: Data Ingestion
-- Scalability: API reading and handling large-scale data ingestion.
-- dlt (Data Load Tool): Data normalization and incremental loading.
-- Homework: Building efficient ingestion pipelines.
+- API reading and pipeline scalability
+- Data normalization and incremental loading
+- Homework
 
 ### 🏛️ Module 3: Data Warehousing
-- BigQuery: Introduction to Google's serverless data warehouse.
-- Optimization: Partitioning, clustering, and performance best practices.
-- Machine Learning: Implementing ML models directly in BigQuery.
+- Introduction to BigQuery
+- Partitioning, clustering, and best practices
+- Machine Learning with BigQuery
 
 ### 📊 Module 4: Analytics Engineering
-- Analytics Engineering: Data modeling and transformation principles.
-- dbt (data build tool): Transforming data with DuckDB and BigQuery.
-- Testing & Deployment: Ensuring data quality and production scalability.
+- Analytics Engineering and Data Modeling
+- dbt (data build tool) with DuckDB & BigQuery
+- Testing, documentation & deployment
 
 ### 🚀 Module 5: Batch Processing
-- Apache Spark: Distributed data processing introduction.
-- DataFrames & SQL: Manipulating large datasets efficiently.
-- Internals: Deep dive into GroupBy operations and Joins.
+- Introduction to Apache Spark
+- DataFrames & SQL
+- Internals of GroupBy and Joins
 
 ### 📡 Module 6: Streaming
-- Apache Kafka: Introduction to real-time event streaming.
-- Kafka Streams & KSQL: Processing streams with SQL-like syntax.
-- Schema Management: Handling evolving data with Avro.
+- Introduction to Kafka
+- Kafka Streams & KSQL
+- Schema management with Avro
 
 ### 🎓 Final Project
-- Application: Applying all concepts learned to a real-world scenario.
-- Peer Review: Engaging in a collaborative feedback process.
+- Apply all concepts learned in a real-world scenario
+- Peer review and feedback process
