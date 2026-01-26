@@ -1,6 +1,6 @@
 # Module 1: Containerization and Infrastructure as Code
 
-This section contains my notes on the first module, covering the fundamentals of containerization with Docker and managing infrastructure as code.
+This section contains my notes on the first module, covering the fundamentals of containerization with Docker and managing infrastructure as code. I made more emphasis on the concepts and the technical details that were more difficult for me to understand.
 
 ## 🏗️ Chapter 1: Environment Architecture & Dependency Management
 
