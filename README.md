@@ -1,6 +1,6 @@
 # Data Engineering Zoomcamp
 
-This repository contains my work for the [Data Engineering Zoomcamp](https://github.com/DataTalksClub/data-engineering-zoomcamp) by [DataTalksClub](https://datatalks.club/).
+This repository contains my work for the [Data Engineering Zoomcamp](https://github.com/DataTalksClub/data-engineering-zoomcamp) by [DataTalksClub](https://datatalks.club/), which I'm taking as part of the 2026 Cohort (5th Edition).
 
 ---
 

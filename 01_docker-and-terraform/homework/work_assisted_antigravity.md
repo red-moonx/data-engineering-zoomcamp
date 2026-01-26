@@ -1,6 +1,6 @@
-# Progress Report: Data Engineering Zoomcamp Homework Assistance
+# Progress Report: Antigravity's assistance with Module 1 
 
-This document summarizes all the technical steps and modifications performed by Antigravity to assist in solving the Module 1 Homework.
+This document summarizes all the technical steps and modifications performed through Antigravity.
 
 ## 1. Initial Exploration and Setup
 - Navigated to the project directory: `/workspaces/data-engineering-zoomcamp/01_docker-and-terraform/homework`.
@@ -43,10 +43,9 @@ Modified the provided Yellow Taxi script to support the specific homework requir
   - **Green Trips**: Loaded 46,912 records into the `green_tripdata` table.
   - **Zones**: Loaded the zone lookup table into the `zones` table.
 
-## 8. Homework Analysis and Documentation
-- Answered **Questions 3, 4, 5, and 6** using SQL queries executed against the live Postgres database.
-- Answered **Question 7** based on Terraform workflow principles (`init`, `apply`, `destroy`).
-- Updated `homework_with_answers.md` by appending "MY ANSWER" sections with the specific SQL queries and results while strictly preserving the teacher's original options.
+## 8. SQL queries
+- SQL queries executed against the live Postgres database.
 
 ---
 **Report generated on:** 2026-01-26
+**Current Commit:** `0dd0e2d`

@@ -102,12 +102,15 @@ You will also need the dataset with zones:
 wget https://github.com/DataTalksClub/nyc-tlc-data/releases/download/misc/taxi_zone_lookup.csv
 ```
 
-## Dockerized Ingestion
+
+
+## Steps taken to load the data into Postgres
 To load the data into Postgres, I've implemented the following changes to the workshop's `ingest_data.py` and environment:
 1. Added support for both CSV and Parquet files, replaced hardcoded URLs with a flexible `--file-path` parameter, and added automatic datetime detection for Green taxi columns.
 2. Added `click`, `sqlalchemy`, `psycopg2-binary`, and `tqdm` to `pyproject.toml` (did not run them during the lectures).
 3. Generated `docker-compose.yaml` to orchestrate `pgdatabase` (Postgres 18) and `pgadmin` (the most "advanced" choice from the ones explained in the course).
-4. Implemnt a Dockerfile.
+4. Implemented a Dockerfile.
+5. I used Antigravity for help implementing the steps above and draft the SQL queries for following questions
 
 ## Question 3. Counting short trips
 For the trips in November 2025 (lpep_pickup_datetime between '2025-11-01' and '2025-12-01', exclusive of the upper bound), how many trips had a `trip_distance` of less than or equal to 1 mile?
@@ -118,7 +121,7 @@ For the trips in November 2025 (lpep_pickup_datetime between '2025-11-01' and '2
 - 8,421
 
 **MY ANSWER:**
-Because my knowledge of SQL is very basic, I have used AI to help me figure it out these answers.
+Because my knowledge of SQL is very basic, I utilized AI tools to assist drafting these queries, which I later verified.
 
 ```sql
 SELECT count(*) 
@@ -127,6 +130,8 @@ WHERE lpep_pickup_datetime >= '2025-11-01' AND lpep_pickup_datetime < '2025-12-0
   AND trip_distance <= 1;
 ```
 The answer is **8,007**.
+
+![pgAdmin Q3 result](./sql_question3.png)
 
 ## Question 4. Longest trip for each day
 Which was the pick up day with the longest trip distance? Only consider trips with `trip_distance` less than 100 miles (to exclude data errors).
@@ -147,7 +152,8 @@ GROUP BY 1
 ORDER BY max_dist DESC
 LIMIT 1;
 ```
-The day with the longest trip is **2025-11-20**.
+The day with the longest trip is **2025-11-14**.
+![pgAdmin Q4 result](./sql_question4.png)
 
 ## Question 5. Biggest pickup zone
 Which was the pickup zone with the largest `total_amount` (sum of all trips) on November 18th, 2025?
@@ -167,7 +173,8 @@ GROUP BY 1
 ORDER BY total DESC
 LIMIT 1;
 ```
-The pickup zone with the largest total amount is **Forest Hills**.
+The pickup zone with the largest total amount is **East Harlem North**.
+![pgAdmin Q5 result](./sql_question5.png)
 
 ## Question 6. Largest tip
 For the passengers picked up in the zone named "East Harlem North" in November 2025, which was the drop off zone that had the largest tip?
@@ -191,6 +198,7 @@ ORDER BY max_tip DESC
 LIMIT 1;
 ```
 The drop-off zone with the largest tip is **Yorkville West**.
+![pgAdmin Q6 result](./sql_question6.png) 
 
 ## Terraform
 In this section homework we'll prepare the environment by creating resources in GCP with Terraform.
