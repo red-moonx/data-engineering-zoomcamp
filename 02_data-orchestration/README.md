@@ -173,3 +173,11 @@ volumes:
   - **state**
   - **orchestration**
 - Docker Compose is a first step toward understanding production orchestration
+
+---
+
+### Status Update: Infrastructure Verified
+
+After running `docker compose up`, all services are working correctly. I can successfully login to the Kestra UI and I'm ready to build my first workflow.
+
+![Kestra Dashboard](file:///workspaces/data-engineering-zoomcamp/02_data-orchestration/kestra-dashboard.png)
