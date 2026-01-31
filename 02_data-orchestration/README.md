@@ -180,4 +180,15 @@ volumes:
 
 After running `docker compose up`, all services are working correctly. I can successfully login to the Kestra UI and I'm ready to build my first workflow.
 
+#### The Four-Container Architecture:
+1.  **`kestra`**: The server/brain that schedules and runs your workflows.
+2.  **`kestra_postgres`**: Stores **Metadata** (YAML flows, execution history, logs). It's the "filing system" for Kestra.
+3.  **`pgdatabase`**: Stores your **Application Data** (the New York taxi data). It's the "warehouse".
+4.  **`pgadmin`**: A management UI to look inside `pgdatabase`.
+
+#### Why two separate Postgres instances?
+We use two databases to achieve **Separation of Concerns**:
+*   **Isolation**: If `pgdatabase` crashes while processing heavy data, Kestra stays alive because its metadata in `kestra_postgres` is separate.
+*   **Mental Model**: In production, we separate "Information about the system" (Metadata) from the "System's actual Information" (Data).
+
 ![Kestra Dashboard](file:///workspaces/data-engineering-zoomcamp/02_data-orchestration/kestra-dashboard.png)
