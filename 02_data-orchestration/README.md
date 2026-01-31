@@ -265,7 +265,29 @@ This workflow demonstrates how Kestra manages the data flow between different ty
     *   **Logic**: It runs a SQL query to calculate the average price per brand.
     *   **Output**: The results are stored and can be viewed directly in the Kestra UI.
 
-### Key Orchestration Takeaway: Data Passing
-We never manually pass the raw data between tasks. Instead, we pass **references (URIs)**. Kestra handles the heavy lifting of ensuring that the file produced by one task is available in the working directory of the next, even if they run in different containers or environments.
+### Load data into Postgres with ETL
+
+Now we are building an ETL pipeline using a PostgreSQL database. The workflow `04_postgres_taxi.yaml` handles the logic for a single data segment (one taxi type for one month), but we can use Kestra's orchestration features to handle the entire dataset.
+
+#### The steps we are taking:
+
+1.  **Use the NY taxi data**: As we did in Module 1, the data is split into months. 
+    *   **Single vs Multiple**: While the `extract` task in this specific flow downloads **one** CSV file at a time (based on your inputs), Kestra allows us to automate the processing of multiple files through **Backfilling**.
+2.  **Parameterization (Inputs)**:
+    *   Before we start, we need to know which month we are processing, whether it's yellow or green taxi data, etc. This is where **Inputs** come in handy.
+    *   Our inputs are `taxi` type, `year`, and `month`. We can change these values when we trigger the flow.
+3.  **Extract (`extract`)**:
+    *   Uses a **Shell Command** (`wget`) to download the compressed `.csv.gz` file.
+    *   The file is piped into `gunzip` and stored in the Kestra internal working directory.
+4.  **Loading with Staging Tables**:
+    *   **Create Tables**: Automatically creates both the final destination table and a temporary `staging_table`.
+    *   **Truncate Staging**: Clears the staging table before every run.
+    *   **High-Speed Ingestion (`CopyIn`)**: Uses the `jdbc.postgresql.CopyIn` plugin for maximum performance.
+5.  **Deduplication and Enrichment**:
+    *   **MD5 Hashing**: We add a `unique_row_id` to every record to act as a composite primary key.
+    *   **MERGE INTO**: Ensures **idempotency** by only inserting records that don't already exist.
+6.  **Cleanup (`purge_files`)**:
+    *   Removes temporary files to save execution storage space.
+
 
 ---
