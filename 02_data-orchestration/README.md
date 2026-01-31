@@ -1,5 +1,7 @@
 # Module 2 – Data Orchestration
 
+Here are my notes for Module 2 of the Data Engineering Zoomcamp course.
+
 ## 0. Recap of key concepts from Module 1
 
 ### Key Concepts
@@ -35,7 +37,7 @@ In this module, the focus is on **ETL (Extract, Transform, Load)** pipelines and
 
 ---
 
-## 2. Setting up Kestra (In Progress)
+## 2. Workflow Orchestration with Kestra
 
 We introduce **Kestra** as the orchestration engine.
 
@@ -192,3 +194,78 @@ We use two databases to achieve **Separation of Concerns**:
 *   **Mental Model**: In production, we separate "Information about the system" (Metadata) from the "System's actual Information" (Data).
 
 ![Kestra Dashboard](file:///workspaces/data-engineering-zoomcamp/02_data-orchestration/kestra-dashboard.png)
+
+---
+
+### Kestra Concepts and Flows
+
+In this section, we dive into the core concepts of Kestra that allow us to build robust data pipelines.
+
+To explore the course examples, I will copy the `flows` folder from the course's repository (from the 2026 Cohort). 
+
+#### Core Concepts
+
+*   **ID and Namespace**: Every workflow has a unique ID and a namespace (which groups related flows). **Note**: Once you save a flow, you cannot change its ID or namespace.
+*   **Tasks**: The modifiable building blocks of a workflow.
+    *   Each task has an **ID** and a **Type** (e.g., `log`, `return`, `sleep`).
+    *   Tasks have specific **Properties** (e.g., a `sleep` task has a `duration`). You can find these details in the official documentation or examples.
+*   **Inputs**: Values provided when a workflow is executed.
+    *   They have an **ID**, **Type**, and optional **Default Value**.
+    *   Inputs can be referenced within tasks using expressions (e.g., `{{ inputs.my_input }}`).
+*   **Variables**: Similar to inputs, but defined within the flow for values used multiple times. They help keep your YAML DRY (Don't Repeat Yourself).
+*   **Outputs**: Tasks generate data (outputs) that can be used as input for subsequent tasks in the same flow.
+*   **Triggers**: Mechanisms to start a flow automatically based on events like a schedule or a webhook.
+*   **Concurrency**: Features to manage how many instances of a flow or task can run simultaneously, preventing resource overload.
+
+Once the workflow has run, we can explore several features:
+*   **Gantt Chart**: A real-time visual overview of the workflow execution, showing the timing and duration of each task.
+*   **Logs**: Detailed logs for each task, showing inputs, outputs, and any errors.
+*   **Metrics**: Metrics about the workflow execution, such as duration, success rate, and resource usage.
+
+---
+
+### Orchestrating Python Code
+
+Kestra can run Python scripts as part of a workflow. We are working with the `02_python.yaml` example.
+
+There are two primary ways to execute Python in Kestra:
+
+#### 1. The Script Task (`io.kestra.plugin.scripts.python.Script`)
+This is the approach used in `02_python.yaml`.
+*   **Best for**: Short snippets, quick data transformations, or logic that can be written directly in the YAML flow.
+*   **Pros**: Entire logic is visible in one file; easy to reference flow inputs and variables.
+*   **Cons**: Can make the YAML file very long and harder to maintain if the script grows complex.
+
+#### 2. The Commands Task (`io.kestra.plugin.scripts.python.Commands`)
+*   **Best for**: Longer scripts, multi-file projects, or when you want to keep your workflow definition clean.
+*   **How it works**: You store your logic in external `.py` files and use the `Commands` task to execute them.
+*   **Pros**: Keeps the YAML definition focused on the high-level orchestration; allows for better code organization and version control of the Python logic itself.
+
+#### Important takeaways:
+*   **Docker Runner**: Kestra runs the Python script inside a dedicated Docker container (`python:slim`), ensuring a consistent environment.
+*   **Dependency Management**: It uses uv under the hood to manage dependencies (like `requests` and `kestra`)in our case, using the `dependencies` property.
+*   **Kestra Library**: By importing `from kestra import Kestra`, the script can send outputs and metrics back to the Kestra UI.
+
+---
+
+## 3. ETL data pipeline with Kestra
+
+In this section, we move beyond simple scripts to a full **ETL (Extract, Transform, Load)** pipeline. We use the flow `03_getting_started_data_pipeline.yaml` as our example.
+
+This workflow demonstrates how Kestra manages the data flow between different types of tasks:
+
+*   **Extract (`extract`)**: Uses the `http.Download` plugin to fetch a JSON file from an external API (`dummyjson.com`).
+    *   **Output**: The task produces an internal storage **URI** (e.g., `kestra://...`). This URI is a pointer to the data stored in Kestra's internal backend, not the data itself.
+*   **Transform (`transform`)**: A Python script task that filters the raw JSON.
+    *   **Input**: It uses the `inputFiles` property to "mount" the URI from the extract task as a local file named `data.json`.
+    *   **Logic**: It filters the products based on an input parameter `columns_to_keep`.
+    *   **Output**: It saves the result as `products.json`, which is then captured as an output artifact.
+*   **Query (`query`)**: Uses the **DuckDB** plugin to analyze the transformed data.
+    *   **Input**: Similar to the transform task, it mounts the `products.json` output from the previous step.
+    *   **Logic**: It runs a SQL query to calculate the average price per brand.
+    *   **Output**: The results are stored and can be viewed directly in the Kestra UI.
+
+### Key Orchestration Takeaway: Data Passing
+We never manually pass the raw data between tasks. Instead, we pass **references (URIs)**. Kestra handles the heavy lifting of ensuring that the file produced by one task is available in the working directory of the next, even if they run in different containers or environments.
+
+---
