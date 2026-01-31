@@ -139,6 +139,18 @@ kestra:
 > [!TIP]
 > The Docker socket is mounted to allow Kestra to orchestrate containerized tasks in development.
 
+#### 3. Named Volumes
+
+To ensure data persistence for our new services, we define named volumes in the `volumes` section of our `docker-compose.yaml`.
+
+```yaml
+volumes:
+  kestra_postgres_data:
+    driver: local
+  kestra_data:
+    driver: local
+```
+
 ### Architecture So Far (Mental Model)
 
 - **PostgreSQL (`pgdatabase`)** -> stores application data (e.g. ny_taxi)
