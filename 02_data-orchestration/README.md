@@ -276,18 +276,38 @@ Now we are building an ETL pipeline using a PostgreSQL database. The workflow `0
 2.  **Parameterization (Inputs)**:
     *   Before we start, we need to know which month we are processing, whether it's yellow or green taxi data, etc. This is where **Inputs** come in handy.
     *   Our inputs are `taxi` type, `year`, and `month`. We can change these values when we trigger the flow.
-3.  **Extract (`extract`)**:
+    *   Following the inputs, we are creating variables that will store elements of the workflow that we will reference in several tasks (such as filename, staging or final table, etc.). Because the green and yellow taxi datasets have different schemas, we need to create different tables for each.
+
+3.  **Set Label (`set_label`)**:
+    *   One of the first steps is to set a **Label** for the execution.
+    *   This ensures that in the Execution UI, we can immediately see which file (e.g., `yellow_tripdata_2021-01.csv`) is being processed, rather than just seeing a generic flow ID.
+
+4.  **Extract (`extract`)**:
+    *   Extraction is the first step of the ETL pipeline. In this case, we are extracting the data from the DataTalksClub github repository.
     *   Uses a **Shell Command** (`wget`) to download the compressed `.csv.gz` file.
     *   The file is piped into `gunzip` and stored in the Kestra internal working directory.
-4.  **Loading with Staging Tables**:
-    *   **Create Tables**: Automatically creates both the final destination table and a temporary `staging_table`.
+5.  **Loading with Staging Tables**:
+    *   **Create Tables**: Here, we start adding some PostgreSQL tasks. We create both the final destination table and a temporary `staging_table`. First, only the column titles (the ones present in the origin table, and also some new columns like a unique ID - to ensure no duplications- and filename).
     *   **Truncate Staging**: Clears the staging table before every run.
     *   **High-Speed Ingestion (`CopyIn`)**: Uses the `jdbc.postgresql.CopyIn` plugin for maximum performance.
-5.  **Deduplication and Enrichment**:
+    *   > **Note on Performance**: We use two different Postgres task types:
+        *   `Queries`: For standard SQL logic (DDL, updates, merges).
+        *   `CopyIn`: Specifically for bulk data loading. It uses the specific PostgreSQL `COPY FROM STDIN` command to stream binary/text data directly, which is significantly faster than running thousands of `INSERT` statements.
+6.  **Deduplication and Enrichment**:
     *   **MD5 Hashing**: We add a `unique_row_id` to every record to act as a composite primary key.
     *   **MERGE INTO**: Ensures **idempotency** by only inserting records that don't already exist.
-6.  **Cleanup (`purge_files`)**:
+7.  **Cleanup (`purge_files`)**:
     *   Removes temporary files to save execution storage space.
+8.  **Plugin Configuration (DRY Principle)**:
+    *   Instead of repeating the database credentials (`url`, `username`, `password`) in every single task, we use the `pluginDefaults` section at the end of the flow.
+    *   This global configuration automatically applies connection details to any task matching the specified type (e.g., `io.kestra.plugin.jdbc.postgresql`), keeping the code clean and maintainable.
+
+### Workflow execution
+I have successfully run the `04_postgres_taxi` workflow in Kestra. The pipeline completed all steps, from initializing the labels to merging the data into Postgres.
+
+![Green Taxi Execution](file:///workspaces/data-engineering-zoomcamp/02_data-orchestration/green_taxi_execution.png)  
+
+---
 
 
 ---
