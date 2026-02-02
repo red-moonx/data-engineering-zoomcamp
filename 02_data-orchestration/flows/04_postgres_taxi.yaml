@@ -39,6 +39,8 @@ tasks:
     type: io.kestra.plugin.scripts.shell.Commands
     outputFiles:
       - "*.csv"
+    taskCache:
+      enabled: true
     taskRunner:
       type: io.kestra.plugin.core.runner.Process
     commands:
