@@ -193,7 +193,7 @@ We use two databases to achieve **Separation of Concerns**:
 *   **Isolation**: If `pgdatabase` crashes while processing heavy data, Kestra stays alive because its metadata in `kestra_postgres` is separate.
 *   **Mental Model**: In production, we separate "Information about the system" (Metadata) from the "System's actual Information" (Data).
 
-![Kestra Dashboard](file:///workspaces/data-engineering-zoomcamp/02_data-orchestration/kestra-dashboard.png)
+![Kestra Dashboard](./kestra-dashboard.png)
 
 ---
 
@@ -308,7 +308,7 @@ Now we are building an ETL pipeline using a PostgreSQL database. The workflow `0
 ### Workflow execution
 I have successfully run the `04_postgres_taxi` workflow in Kestra, with the following inputs: `taxi=green`, `year=2019`, `month=01`. The pipeline completed all steps, from initializing the labels to merging the data into Postgres.
 
-![Green Taxi Execution](file:///workspaces/data-engineering-zoomcamp/02_data-orchestration/green_taxi_execution.png)  
+![Green Taxi Execution](./green_taxi_execution.png)  
 
 
 ---
@@ -401,7 +401,7 @@ To enable Kestra to interact with GCP we added the JSON key to KV store.
 With the `06_gcp_kv` flow we crate the necessary variables within Kestra's KV store for subsequent flows.
 
 
-#### 3. Create GCP Resources (`07_gcp_setup`)
+#### 3. Create GCP resources (`07_gcp_setup`)
 Once the configuration is set, run this flow to provision the actual resources in Google Cloud.
 1.  Execute `07_gcp_setup`.
 2.  Kestra will:
@@ -417,5 +417,48 @@ This workflow (`08_gcp_elt_taxi.yaml`) is very similar to the `02_postgres_taxi.
 
 Inputs stay the same, but the differences start at the level of variables, because we are not creating postgress tables. Instead we are referring to the file that we upload to our data lake. 
 
+We define the following variables to dynamically reference our GCP resources using the keys we configured earlier:
 
+```yaml
+variables:
+  file: "{{inputs.taxi}}_tripdata_{{inputs.year}}-{{inputs.month}}.csv"
+  gcs_file: "gs://{{kv('GCP_BUCKET_NAME')}}/{{vars.file}}"
+  table: "{{kv('GCP_DATASET')}}.{{inputs.taxi}}_tripdata_{{inputs.year}}_{{inputs.month}}"
+  data: "{{outputs.extract.outputFiles[inputs.taxi ~ '_tripdata_' ~ inputs.year ~ '-' ~ inputs.month ~ '.csv']}}"
+```
 
+**Key GCP Variables:**
+1. First we need to reference the file that we upload to our data lake in GCS in BigQuery:
+*   **`gcs_file`**: constructs the full GCS path (URI) for the file. It dynamically retrieves my bucket name from the KV Store (`GCP_BUCKET_NAME`) and the file name from the inputs.
+2. We need to create the table in BigQuery (this is similar to what we did in Postgress)
+*   **`table`**: BigQuery table name. It retrieves my dataset name from the KV Store (`GCP_DATASET`).
+3. The data is also similar to what we did in Postgress.
+
+**Overview of tasks:**
+1. Extract the data from the source.
+2. Upload the data to GCS. This tasks formats the data for us to meet GCS requirements (for example, meeting the gsc file name requirement "gs:// ...").
+3. Create the table in BigQuery. This creates a table similarly to how we did for Postgress, but following the BigQuery requirements in formatting (projectID.dataset.table). Then we need to specify all the different columns and what data type they are.
+4. Create a staging table in bigQuery.
+5. Load the data into BigQuery. We specify the format (CSV), the uris, etc. 
+6. Adding unique IDs (MD5 hash) and filename. 
+7. Merge the data from the staging table to the main table. 
+
+The key takeaway is that we are extracting our data and inmediately loading it to our data lake. Once it is there, it is easy for BigQuery to reference that data (through uris). 
+
+![BigQuery Yellow Taxi Execution](./bigquery_yellow.png) 
+
+### Scheduming and backfilling ELT
+We have two different schedule for each taxi type to make sure that we don't have any overlap in the execution of the flows. 
+
+We are trying a backfill execution for February and March of 2019.
+
+## 5. Using AI to assist in building a pipeline
+It can help with documentation, code structure etc. 
+Kestra has an AI copilot built in. 
+
+To fine tune the AI copilot function in Kestra, we need to add a new block in Kestra configuration (in our docker compose file). It needs the API key as part of that configuration.
+
+I set up the API key in the environment (using an `.env` file). 
+
+### Retrieval Augmented Generation (RAG)
+It allows us to ingest context to our AI copilot tool, to provide us with more accurate and helpful responses. I added the API key to Kestra's KV store. 
