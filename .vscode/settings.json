@@ -1,0 +1,20 @@
+{
+    "editor.accessibilitySupport": "off",
+    "audioCues.lineHasError": "off",
+    "audioCues.lineHasFoldedArea": "off",
+    "audioCues.lineHasInlineSuggestion": "off",
+    "audioCues.noInlayHints": "off",
+    "audioCues.onDebugBreak": "auto",
+    "audioCues.taskCompleted": "on",
+    "audioCues.taskFailed": "on",
+    "audioCues.terminalBell": "on",
+    "accessibility.signals.lineHasError": {
+        "sound": "off"
+    },
+    "accessibility.signals.taskCompleted": {
+        "sound": "on"
+    },
+    "accessibility.signals.taskFailed": {
+        "sound": "on"
+    }
+}
