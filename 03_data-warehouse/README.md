@@ -21,7 +21,16 @@ OLAP and OLTP are two primary data processing systems, but they serve different 
 
 ### Data Warehouse
 
-A data warehouse is a database that stores data for analysis and decision-making. It is a central repository containing different sort of data, tipically raw data, metadata and summary data. It is fed by different data sources that first report to a staging area which is then written to a data warehouse. The data warehouse can be transformed to Data Marts (smaller subsets of the data warehouse, for example, for specific departments like sales or finance) for easier analysis.
+A data warehouse is a database that stores data for analysis and decision-making. It is a central repository containing different sort of data, tipically raw data, metadata and summary data. It is fed by different data sources that first report to a staging area which is then written to a data warehouse. The data warehouse can be transformed to Data Marts (smaller subsets of the data warehouse, for example: purchasing, sales, inventory...) for easier analysis. A data warehouse provides all these possibilities of accessing raw data, summary data or data marts. 
+
+### Bigquery
+
+BigQuery is a serverless, highly scalable, and cost-effective cloud data warehouse. It allows you to analyze large datasets using SQL queries, and it integrates with other Google Cloud services. BigQuery is a columnar database, which means that it stores data in columns rather than rows. This makes it very efficient for analytical queries, as it only needs to read the columns that are needed for the query. It has built-in functions such as machine learning (via de SQL interface), geospatial analysis or business intelligence. It maximizes flexibility by separating the compute engine (data analysis) from the storage engine. 
+
+
+
+
+
 
 
 
