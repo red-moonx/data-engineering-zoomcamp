@@ -114,10 +114,11 @@ BigQuery ML supports all key machine learning steps, including automatic feature
 Different algortums are supported depending on the type of problem. For example, for predicting stock prices, we can use linear regression, boosted trees, DNN regression, etc. 
 ![ML Model Cheatsheet](ml-model-cheatsheet.png)
 
-### Create a model
+### Create a model (`big_query_ml.sql`)
 For example, for the NY taxi dataset, if we want to predict the tip amount, we have first to select the columns of the dataset that may have an influence (passenger count, trip distance, fare amount...). 
 
 Some of these columns will require automatic or manual feature engineering (preprocessing).
 
-After running the query, we can see the model in the BigQuery UI. Within the results we can see the evaluation metrics of the model to help us improve it§
+After running the query, we can see the model in the BigQuery UI. Within the results we can see the evaluation metrics of the model to help us improve it. 
 
+The model can be exported (following the instructions in `extract_model.md`).
