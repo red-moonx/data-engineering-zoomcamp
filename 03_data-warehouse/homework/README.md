@@ -166,9 +166,13 @@ Create a (regular/materialized) table in BQ using the Yellow Taxi Trip Records (
 > It is better to partition by the column we usually base the filter on:
 > Partition by tpep_dropoff_datetime and Cluster on VendorID
 > 
->
->
->
+>```sql
+>CREATE OR REPLACE TABLE `dezoomcamp_module3.yellow_tripdata_2024_part_clust`
+>PARTITION BY DATE(tpep_dropoff_datetime)
+>CLUSTER BY VendorID AS (
+>  SELECT * FROM `dezoomcamp_module3.yellow_tripdata_2024`
+>);
+>```
 
 
 
@@ -187,12 +191,24 @@ Create a (regular/materialized) table in BQ using the Yellow Taxi Trip Records (
 
 > [!TIP]
 > **My Answer:** 
-
-
+> Using the non-partitioned table (310.24 MB data processed):
+>```sql
+> SELECT DISTINCT VendorID 
+> FROM `dezoomcamp_module3.yellow_tripdata_2024`
+> WHERE tpep_dropoff_datetime BETWEEN '2024-03-01' AND '2024-03-15'
+>```
+>
+> Using the partitioned table (26.84 MB MB data processed):
+>```sql
+>SELECT DISTINCT VendorID 
+>FROM `dezoomcamp_module3.yellow_tripdata_2024_part_clust`
+>WHERE tpep_dropoff_datetime BETWEEN '2024-03-01' AND '2024-03-15'
+>```
+>
+> The correct answer is: 310.24 MB for non-partitioned table and 26.84 MB for the partitioned table
 
 
 ### 7. External table storage
-
 **Where is the data stored in the External Table you created?**
 
 - Big Query
@@ -200,16 +216,14 @@ Create a (regular/materialized) table in BQ using the Yellow Taxi Trip Records (
 - GCP Bucket
 - Big Table
 
-- Big Table
 
 > [!TIP]
 > **My Answer:** 
-
+> The external table is stored in the GCP Bucket. Unlike native tables, BigQuery does not ingest or "own" the raw data; it simply maintains a metadata link that points to the file's URI (such as a Parquet or CSV file path).
 
 
 
 ### 8. Clustering best practices
-
 **It is best practice in Big Query to always cluster your data:**
 
 - True
@@ -217,9 +231,7 @@ Create a (regular/materialized) table in BQ using the Yellow Taxi Trip Records (
 
 > [!TIP]
 > **My Answer:**
-> FALSE, it depends on the query.
-
-
+> False, it depends on the specific query patterns and the size of the dataset. Generally, clustering is a best practice for large tables (> 1 GB) where queries frequently filter or aggregate using specific columns. However, it is better to skip clustering on small datasets, when query patterns are highly varied rather than targeting primary columns, or when the data has high churn.
 
 
 
@@ -229,5 +241,12 @@ Create a (regular/materialized) table in BQ using the Yellow Taxi Trip Records (
 
 > [!TIP]
 > **My Answer:** 
+> 0 Bytes. There are a few reasons:
+> 1. Metadata vs data scans
+> For native tables, BigQuery constantly maintains a count of the total number of rows. When we ask for a simple count(*), BigQuery’s optimizer doesn't bother looking at the actual data rows; it simply pulls the number from the table's metadata.
+> 2. Columnar storage:
+> BigQuery uses a columnar format (Capacitor). In a standard query, you are charged based on the amount of data in the columns you select. Because count(*) doesn't require reading any specific column values to give you a total tally, there is no data "processed" in the traditional sense.
+> 3. Materialized vs external table:
+> For external files (CSV, Parquet), BigQuery doesn't "own" the metadata, so it actually has to scan the files to count the rows, leading to a non-zero byte estimate.
 
 
