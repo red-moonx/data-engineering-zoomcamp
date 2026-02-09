@@ -47,9 +47,10 @@ Note: You will need to use the PARQUET option when creating an external table.
 > 2. I also placed the Google Cloud Service Account key (`gcs.json`) in the directory.
 > 3. Built and ran the Docker container with the following command:
 > 
+> ```bash
 > docker build -t taxi-ingest:uv . 
 > docker run -v $(pwd)/gcs.json:/app/gcs.json -it taxi-> ingest:uv
-> 
+> ```
 > This successfully uploaded the parquet files to the bucket `dezoomcamp_hw3_lunazea_2026`.
 
 ## BigQuery Setup
