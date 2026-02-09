@@ -165,8 +165,8 @@ Create a (regular/materialized) table in BQ using the Yellow Taxi Trip Records (
 
 > [!TIP]
 > **My Answer:** 
-> It is better to partition by the column we usually base the filter on:
-> Partition by tpep_dropoff_datetime and Cluster on VendorID
+> It is better to partition by the column we usually base the filter on. Therefore, the correct aswer is: Partition by tpep_dropoff_datetime and Cluster on VendorID.
+> Partitioning by tpep_dropoff_datetime allows BigQuery to prune entire days of data, drastically reducing costs when filtering by date. Clustering on VendorID further improves performance by physically sorting data within those partitions, which speeds up queries that filter or group by specific vendors.
 > 
 >```sql
 >CREATE OR REPLACE TABLE `dezoomcamp_module3.yellow_tripdata_2024_part_clust`
