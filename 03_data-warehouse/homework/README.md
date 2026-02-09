@@ -80,10 +80,10 @@ Create a (regular/materialized) table in BQ using the Yellow Taxi Trip Records (
 
 ### 1. Counting records
 **What is the count of records for the 2024 Yellow Taxi Data?**
-65,623
-840,402
-20,332,093
-85,431,289
+- 65,623
+- 840,402
+- 20,332,093
+- 85,431,289
 
 > [!TIP]
 > **My Answer:** 
@@ -104,6 +104,7 @@ Create a (regular/materialized) table in BQ using the Yellow Taxi Trip Records (
 > [!TIP]
 > **My Answer:** 
 > The SQL questies are:
+> 
 > For the external table:
 > ```sql
 > SELECT COUNT(DISTINCT PULocationID) FROM `dezoomcamp_module3.yellow_tripdata_2024_ext`;
@@ -243,11 +244,11 @@ Create a (regular/materialized) table in BQ using the Yellow Taxi Trip Records (
 > [!TIP]
 > **My Answer:** 
 > 0 Bytes. There are a few reasons:
-> 1. Metadata vs data scans
+> 1. **Metadata vs data scans:**
 > For native tables, BigQuery constantly maintains a count of the total number of rows. When we ask for a simple count(*), BigQuery’s optimizer doesn't bother looking at the actual data rows; it simply pulls the number from the table's metadata.
-> 2. Columnar storage:
+> 2. **Columnar storage:**
 > BigQuery uses a columnar format (Capacitor). In a standard query, you are charged based on the amount of data in the columns you select. Because count(*) doesn't require reading any specific column values to give you a total tally, there is no data "processed" in the traditional sense.
-> 3. Materialized vs external table:
+> 3. **Materialized vs external table:**
 > For external files (CSV, Parquet), BigQuery doesn't "own" the metadata, so it actually has to scan the files to count the rows, leading to a non-zero byte estimate.
 
 
