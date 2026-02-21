@@ -131,3 +131,186 @@ Released in 2025, **dbt Fusion** is a new high-performance engine written in **R
 *   **Real-time IDE**: Powers the VS Code extension with live feedback.
 
 While dbt Core remains widely used, dbt Fusion represents a significant step forward in performance and developer experience. However, ecosystem adoption is still evolving, with support for all adapters (such as DuckDB) catching up to the core engine's capabilities.
+
+---
+
+## 🚀 Project Setup: Google Cloud Platform & BigQuery
+
+This section details the infrastructure setup required to run the data pipeline. We use **Google Cloud Platform (GCP)** as our cloud provider and **BigQuery** as our Data Warehouse.
+
+### 1. Google Cloud Project Configuration
+*   **Project Name:** `DE-zoomcamp-module4-luna`
+*   **Project ID:** `de-zoomcamp-module4-luna`
+
+> [!NOTE]
+> Ensure the Project ID is unique and matches your configuration files exactly, as it is the primary identifier for all GCP services.
+
+### 2. API Enablement
+To allow external tools (like dbt) to interact with the project, the **BigQuery API** must be active:
+1.  Search for **"BigQuery API"** in the GCP Console search bar.
+2.  Click **Enable** (if not already active).
+
+### 3. Service Account Setup (IAM)
+We create a Service Account (SA) to act as a "digital worker" with specific permissions, allowing dbt to perform tasks without using a personal user login.
+
+*   **Service Account Name:** `dbt-bigquery-SA`
+*   **Roles Assigned:**
+    *   `BigQuery Data User`: Grants access to read and query data.
+    *   `BigQuery Job User`: Allows the account to run tasks (jobs) in BigQuery.
+    *   `BigQuery User`: Provides general access to interact with the project.
+    *   *(Optional)* `BigQuery Admin` for full control over BigQuery resources.
+
+### 4. Authentication Key
+To authenticate your local environment with GCP:
+1.  Go to the **Keys** tab within the `dbt-bigquery-SA` service account.
+2.  Select **Add Key** > **Create new key**.
+3.  Choose **JSON** format and download the file.
+
+> [!CAUTION]
+> Never upload the JSON key file to GitHub. Add the filename to your `.gitignore` immediately after downloading.
+
+---
+
+### 📥 Data Ingestion for This Module
+
+This module uses **yellow and green taxi trip data for 2019 and 2020**, sourced from the [DataTalksClub NYC TLC Data repository](https://github.com/DataTalksClub/nyc-tlc-data/releases). The ingestion pipeline downloads all 48 files and uploads them to a **Google Cloud Storage (GCS)** bucket, where they serve as the raw data source for BigQuery external tables.
+
+#### What Gets Loaded
+
+| Parameter | Value |
+|---|---|
+| **GCS Bucket** | `dezoomcamp_hw4_lunazea_2026` |
+| **Colors** | Yellow, Green |
+| **Years** | 2019, 2020 |
+| **Months** | January – December (12 months each) |
+| **Total Files** | 48 (2 colors × 2 years × 12 months) |
+| **File Format** | `.csv.gz` (compressed CSV) |
+
+#### How It Works
+
+The [`load_taxi_data.py`](load_taxi_data.py) script handles the full pipeline:
+
+1. **Authenticates** with GCP using the service account JSON key.
+2. **Verifies** the GCS bucket exists and is accessible.
+3. **Downloads** all files in parallel (4 threads) from the DataTalksClub GitHub releases.
+4. **Uploads** each file to GCS with chunked transfer and verifies every upload before deleting the local copy.
+
+The script is packaged in a Docker container to ensure a consistent, reproducible environment regardless of local Python setup.
+
+#### GCS Bucket Setup
+
+The bucket must be created **before** running the script, since the service account (`dbt-bigquery-sa`) only has object-level permissions — not project-level bucket creation rights. We created it manually via the terminal:
+
+```bash
+gcloud storage buckets create gs://dezoomcamp_hw4_lunazea_2026 \
+  --project=de-zoomcamp-module4-luna \
+  --location=US
+```
+
+Then granted the service account access to the bucket:
+
+```bash
+gcloud storage buckets add-iam-policy-binding gs://dezoomcamp_hw4_lunazea_2026 \
+  --member="serviceAccount:dbt-bigquery-sa@de-zoomcamp-module4-luna.iam.gserviceaccount.com" \
+  --role="roles/storage.admin"
+```
+
+> [!NOTE]
+> We also simplified the `create_bucket()` function in the script to remove a `list_buckets()` call that required project-wide IAM permissions. It now simply checks if the bucket is accessible with `get_bucket()` — a cleaner and less privileged approach.
+
+#### Running the Pipeline
+
+```bash
+# Build the Docker image
+docker build -t taxi-data-loader .
+
+# Run the container
+docker run --name taxi-data-loader taxi-data-loader
+
+# Clean up after a previous run (if re-running)
+docker rm taxi-data-loader
+```
+
+Once complete, all 48 files will be available at `gs://dezoomcamp_hw4_lunazea_2026/` and ready to be referenced as **BigQuery external tables**.
+
+---
+
+### 🗄️ BigQuery Dataset & External Tables
+
+With the raw files in GCS, we create a **BigQuery dataset** and **external tables** that point directly to them — the same pattern used in Module 3. dbt will then use these external tables as its raw source layer.
+
+#### Step 1: Create the Dataset
+
+In the BigQuery Console, create a dataset named `nytaxi` in your project. Or via terminal:
+
+```bash
+bq mk --dataset de-zoomcamp-module4-luna:nytaxi
+```
+
+#### Step 2: Create External Tables
+
+Run the following SQL in the BigQuery Console:
+
+```sql
+-- External table for yellow taxi (2019 & 2020)
+CREATE OR REPLACE EXTERNAL TABLE `de-zoomcamp-module4-luna.nytaxi.external_yellow_tripdata`
+OPTIONS (
+  format = 'CSV',
+  uris = [
+    'gs://dezoomcamp_hw4_lunazea_2026/yellow_tripdata_2019-*.csv.gz',
+    'gs://dezoomcamp_hw4_lunazea_2026/yellow_tripdata_2020-*.csv.gz'
+  ]
+);
+
+-- External table for green taxi (2019 & 2020)
+CREATE OR REPLACE EXTERNAL TABLE `de-zoomcamp-module4-luna.nytaxi.external_green_tripdata`
+OPTIONS (
+  format = 'CSV',
+  uris = [
+    'gs://dezoomcamp_hw4_lunazea_2026/green_tripdata_2019-*.csv.gz',
+    'gs://dezoomcamp_hw4_lunazea_2026/green_tripdata_2020-*.csv.gz'
+  ]
+);
+```
+
+> [!NOTE]
+> BigQuery reads `.csv.gz` files natively — no decompression needed. The `*` wildcard matches all monthly files for each year.
+
+Unlike Module 3, we do **not** create partitioned or clustered native tables here — dbt will handle all further transformations using these external tables as the raw source.
+
+---
+
+## 🛠️ dbt Cloud Setup
+
+### 1. Create a Developer Account
+Sign up for a free **dbt Cloud Developer account** at [cloud.getdbt.com](https://cloud.getdbt.com). The developer tier is sufficient for this module.
+
+### 2. Connect to BigQuery
+In the dbt Cloud account settings, create a new **BigQuery connection**:
+- Upload the service account JSON key (`de-zoomcamp-module4-luna-65a6fedc7780.json`) as the auth credentials.
+- Set the project to `de-zoomcamp-module4-luna` and the dataset to `nytaxi`.
+- Test the connection to verify it succeeds before moving on.
+
+### 3. Integrate GitHub
+Under account settings, connect your **GitHub account** to dbt Cloud. This allows dbt to pull and push code directly from your repositories.
+
+### 4. Set Up a Project in dbt Studio
+Navigate to **dbt Studio** (the web IDE) and create a new project:
+1. **Add the BigQuery connection** configured above.
+2. Fill in the required fields: auth credentials, a unique project name, dataset, etc.
+3. **Test the connection** to confirm everything is wired up correctly.
+
+### 5. Choose a Repository
+After the connection test, select where dbt will store your project code:
+
+| Option | When to use |
+|---|---|
+| **GitHub** (recommended) | Production setups — full version control via your own repo |
+| **Managed** *(used here)* | Learning/exploration — dbt Cloud hosts the repo for you |
+
+> [!NOTE]
+> For this module we selected **Managed** for simplicity. In a real project, always use a GitHub-connected repository for proper version control and CI/CD.
+
+### 6. Initialize the dbt project
+It creates the entire structure for the project. After, I created a new brach with my name and commit. 
+
