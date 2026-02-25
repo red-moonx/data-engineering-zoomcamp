@@ -28,21 +28,26 @@ The course is composed of the following modules:
 ### 🏛️ Module 3: Data Warehousing
 - Introduction to BigQuery
 - Partitioning, clustering, and best practices
-- Machine Learning with BigQuery
+- Machine Learning in BigQuery
 
 ### 📊 Module 4: Analytics Engineering
 - Analytics Engineering and Data Modeling
 - dbt (data build tool) with DuckDB & BigQuery
-- Testing, documentation & deployment
+- Testing, documentation, and deployment
 
-### 🚀 Module 5: Batch Processing
+### 🗄️ Module 5: Data Platforms
+- Building end-to-end data pipelines with Bruin
+- Data ingestion, transformation, and quality
+- Deployment to cloud (BigQuery)
+
+### 🚀 Module 6: Batch Processing
 - Introduction to Apache Spark
-- DataFrames & SQL
+- DataFrames and SQL
 - Internals of GroupBy and Joins
 
-### 📡 Module 6: Streaming
+### 📡 Module 7: Streaming
 - Introduction to Kafka
-- Kafka Streams & KSQL
+- Kafka Streams and KSQL
 - Schema management with Avro
 
 ### 🎓 Final Project

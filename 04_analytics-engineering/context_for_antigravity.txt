@@ -1,0 +1,13 @@
+Context for Antigravity (AI Assistant)
+========================================
+
+Module: 04 - Analytics Engineering
+
+Setup:
+- The user is using dbt Cloud (not dbt Core / CLI)
+- The data warehouse is BigQuery (not DuckDB)
+
+Notes:
+- Class notes in the class_notes/ folder may reference DuckDB and dbt Core setups.
+- Many configuration steps (e.g., profiles.yml, connection setup) will differ for dbt Cloud + BigQuery.
+- When helping the user, always account for the dbt Cloud + BigQuery context, even if the notes describe a different setup.

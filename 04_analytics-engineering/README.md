@@ -312,5 +312,61 @@ After the connection test, select where dbt will store your project code:
 > For this module we selected **Managed** for simplicity. In a real project, always use a GitHub-connected repository for proper version control and CI/CD.
 
 ### 6. Initialize the dbt project
-It creates the entire structure for the project. After, I created a new brach with my name and commit. 
+It creates the entire structure for the project. After, I created a new branch with my name and committed.
+
+> [!NOTE]
+> **`dbt init` is a dbt Core (CLI) command** — it is **not needed in dbt Cloud**. The "Initialize project" button in the dbt Cloud IDE is the equivalent step. It scaffolds the same folder structure (`dbt_project.yml`, `models/`, etc.) without requiring any terminal commands.
+
+| | dbt Core (CLI) | dbt Cloud |
+|---|---|---|
+| **Project init** | `dbt init` via terminal | "Initialize project" button in the IDE ✅ |
+| **profiles.yml** | Managed manually | Managed by dbt Cloud (configured in UI) |
+
+**What comes next after initializing:**
+1. Delete the example models (`models/example/`) — they are just placeholders.
+2. Create your first model — a `.sql` file inside `models/`.
+3. Run `dbt run` — using the command bar at the bottom of the dbt Cloud IDE.
+
+---
+
+## 🏗️ dbt Project Structure
+
+For full details of project structure see: [class_notes/4_3_1_dbt_project_structure.md](class_notes/4_3_1_dbt_project_structure.md)
+
+> [!NOTE]
+> The class notes cover the **dbt Core + DuckDB** setup. We are using **dbt Cloud + BigQuery**, so some details differ (e.g., no `profiles.yml`, no CLI setup). The folder structure and concepts are the same.
+
+### Clarifications for some concepts / dbt Cloud + BigQuery
+
+#### Macros
+**Macros** are reusable pieces of Jinja-templated SQL logic — like functions you can call across multiple models to avoid repetition.
+
+Instead of writing the same `CASE` statement in many models, define it once as a macro:
+
+```sql
+-- macros/payment_type_description.sql
+{% macro payment_type_description(payment_type) %}
+    CASE {{ payment_type }}
+        WHEN 1 THEN 'Credit card'
+        WHEN 2 THEN 'Cash'
+        WHEN 3 THEN 'No charge'
+        ELSE 'Unknown'
+    END
+{% endmacro %}
+```
+
+Then call it in any model:
+
+```sql
+select
+    payment_type,
+    {{ payment_type_description('payment_type') }} as payment_description
+from {{ ref('stg_green_tripdata') }}
+```
+
+Key points:
+- Macros live in the `macros/` folder as `.sql` files.
+- They use `{% macro name(args) %}` ... `{% endmacro %}` syntax.
+- dbt ships with built-in macros like `{{ ref() }}` and `{{ source() }}` that you already use.
+- Community packages (e.g., `dbt-utils`) provide ready-made macros for common patterns.
 
