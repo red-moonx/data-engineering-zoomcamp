@@ -81,3 +81,178 @@ bruin-pipeline/
 > ```bash
 > bruin validate bruin-pipeline
 > ```
+
+---
+
+## Configuration Files
+
+Bruin uses two separate config files that work together but have different responsibilities:
+
+| | `.bruin.yml` | `pipeline.yml` |
+|---|---|---|
+| **What it defines** | Which connections *exist* and their credentials | Which connection this pipeline uses by default |
+| **How many** | One per workspace (global) | One per pipeline |
+| **Goes to git?** | ❌ No (added to `.gitignore`) | ✅ Yes |
+| **Contains secrets?** | ✅ Yes (paths, passwords, API keys) | ❌ No (only names/aliases) |
+| **Managed by** | The environment admin | The pipeline developer |
+
+> **Key idea:** `.bruin.yml` is the *registry* of available connections. `pipeline.yml` simply picks which one to use. This way, if credentials change, you update one file — all pipelines keep working without any changes.
+
+---
+
+### `.bruin.yml` — Environments & Connections
+
+This file lives at the **root of the workspace** and is automatically added to `.gitignore` — it should **never be pushed to the repo** since it contains connection credentials and secrets.
+
+It defines environments (e.g. `default`, `production`, `staging`) and the connections available in each. Our current setup:
+
+```yaml
+default_environment: default
+environments:
+    default:
+        connections:
+            duckdb:
+                - name: duckdb-default
+                  path: duckdb.db       # local database file, created on first run
+            chess:
+                - name: chess-default
+                  players:
+                    - MagnusCarlsen
+                    - Hikaru
+```
+
+- **`duckdb-default`** — points to a local `duckdb.db` file on disk. DuckDB is an embedded analytical database (no server needed — just a file). The `.db` file doesn't exist yet; **Bruin creates it automatically the first time the pipeline runs**.
+- **`chess-default`** — connects to the public Chess.com API for the listed players. This is the data **source**.
+
+The connection names (`duckdb-default`, `chess-default`) are just aliases — what matters is that they match the names referenced in `pipeline.yml` and the asset files.
+
+---
+
+### `pipeline.yml` — Pipeline Configuration
+
+Defines the global settings for the pipeline. All assets inside the pipeline inherit these defaults.
+
+```yaml
+name: bruin-init        # identifier shown in logs and the Bruin panel
+schedule: daily         # how often to run (also: hourly, weekly, or cron expressions)
+start_date: "2023-03-20" # earliest date Bruin will process data for
+catchup: false          # if false, skips missed runs (like Airflow's catchup=False)
+
+default_connections:
+    duckdb: "duckdb-default"  # all assets use this DuckDB connection by default
+```
+
+The `start_date` is important for **incremental ingestion** — Bruin uses it to know the boundary for time-based data processing. Assets can override the default connection if needed.
+
+---
+
+## Assets
+
+The `assets/` folder contains the actual data scripts. Each asset is a self-contained unit of work (ingestion, transformation, query). Asset types:
+
+| Type | Example | Purpose |
+|------|---------|---------|
+| **YAML (ingestr)** | `players.asset.yml` | Declarative ingestion from a source to a destination |
+| **SQL** | `player_stats.sql` | SQL transformations with optional quality checks |
+| **Python** | `my_python_asset.py` | Custom logic in Python |
+
+### Dependencies and execution order
+
+Assets can declare dependencies on each other using the `depends` field. Bruin builds a **lineage graph** from these declarations and runs assets in the correct order automatically — when an upstream asset finishes, it triggers the downstream ones.
+
+In our pipeline:
+
+```
+dataset.players  (players.asset.yml)   ←  runs first (ingestion from Chess.com)
+       ↓
+dataset.player_stats  (player_stats.sql)  ←  runs after, reads from dataset.players
+```
+
+The dependency is declared in `player_stats.sql`:
+
+```sql
+/* @bruin
+name: dataset.player_stats
+type: duckdb.sql
+materialization:
+  type: table
+
+depends:
+   - dataset.players    -- ← Bruin will not run this until dataset.players is done
+@bruin */
+
+SELECT name, count(*) AS player_count
+FROM dataset.players
+GROUP BY 1
+```
+
+The asset also defines **quality checks** on the output columns (e.g. `not_null`, `unique`, `positive`) and a **custom check** that verifies the result table is not empty — Bruin runs these automatically after the query completes.
+
+---
+
+## Running a Pipeline
+
+To run a specific asset:
+
+```bash
+bruin run \
+  --start-date 2026-02-25T00:00:00.000Z \
+  --end-date 2026-02-25T23:59:59.999999999Z \
+  --environment default \
+  "bruin-pipeline/assets/players.asset.yml"
+```
+
+### Built-in date interval variables
+
+One of Bruin's key features is the built-in `start_date` and `end_date` interval variables. These are passed to every asset run and control the time window for data ingestion — without any extra configuration.
+
+For example, to ingest data for the entire year 2025:
+
+```bash
+bruin run \
+  --start-date 2025-01-01T00:00:00.000Z \
+  --end-date 2025-12-30T23:59:59.999999999Z \
+  --environment default \
+  "bruin-pipeline/assets/players.asset.yml"
+```
+
+Built-in ingestor assets (YAML type) automatically use these dates for **incremental ingestion** — only fetching data within the specified window, rather than re-loading everything from scratch every time.
+
+### What happens internally
+
+When we ran `players.asset.yml` for the first time, Bruin executed three phases internally:
+
+| Phase | What it does |
+|-------|-------------|
+| **Extract** | Called the Chess.com API and fetched profiles for the configured players |
+| **Normalize** | Converted the raw JSON response into the correct columnar format for DuckDB |
+| **Load** | Wrote the data to `duckdb / dataset.players` in the local `duckdb.db` file |
+
+> **Note:** The `duckdb.db` file did **not exist** before this run — Bruin created it automatically during the Load phase.
+
+### Running dependent assets
+
+Once `dataset.players` is loaded, we can run the downstream SQL asset. Because `dataset.player_stats` declares `dataset.players` as a dependency, Bruin knows to run them in order. You can trigger the full chain with `--downstream`:
+
+```bash
+bruin run --downstream \
+  --start-date 2025-01-01T00:00:00.000Z \
+  --end-date 2025-12-30T23:59:59.999999999Z \
+  "bruin-pipeline/assets/players.asset.yml"
+```
+
+Or run `player_stats` on its own (after `players` has already been loaded):
+
+```bash
+bruin run "bruin-pipeline/assets/player_stats.sql"
+```
+
+### Querying the results
+
+Once the pipeline has run, you can query the data directly via the Bruin CLI:
+
+```bash
+bruin query --connection duckdb-default --query "SELECT * FROM dataset.players LIMIT 10"
+bruin query --connection duckdb-default --query "SELECT * FROM dataset.player_stats"
+```
+
