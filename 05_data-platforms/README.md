@@ -695,7 +695,101 @@ Fix: replace all references to `pickup_datetime` / `dropoff_datetime` with `tpep
 
 ### Reports Layer
 
-> Clarifications will be added here as we go through the video.
+The reports layer (`pipeline/assets/reports/trips_report.sql`) aggregates the clean, deduplicated staging data into a **dashboard-ready summary table**. Here is a section-by-section breakdown.
+
+#### `name` & `type`
+
+```yaml
+name: reports.trips_report
+type: duckdb.sql
+```
+
+- **`name`** — defines the asset's identifier in the Bruin DAG. The `reports.` prefix maps to the `reports` schema in DuckDB, and `trips_report` becomes the table name.
+- **`type: duckdb.sql`** — tells Bruin this is a SQL asset that runs against DuckDB.
+
+#### `depends`
+
+```yaml
+depends:
+  - staging.trips
+```
+
+Bruin uses this to ensure `staging.trips` is fully built and tested **before** this asset runs. It also determines the correct execution order in the pipeline DAG automatically.
+
+#### `materialization`
+
+```yaml
+materialization:
+  type: table
+  strategy: time_interval
+  incremental_key: trip_date
+  time_granularity: date
+```
+
+- **`type: table`** — Bruin will `CREATE OR REPLACE` a persistent table (not a view).
+- **`strategy: time_interval`** — instead of rebuilding the whole table every run, Bruin **deletes** the rows in the current time window and **re-inserts** them. This makes backfills efficient.
+- **`incremental_key: trip_date`** — the column Bruin uses to determine which rows belong to the current time window. Our SELECT produces `trip_date` (a DATE from `CAST(tpep_pickup_datetime AS DATE)`), so Bruin can slice the table by it.
+- **`time_granularity: date`** — tells Bruin the key is at DATE precision (vs. `timestamp`). The staging layer used `tpep_pickup_datetime` (a timestamp) as its incremental key, but here we've aggregated down to a date so we switch granularity.
+
+#### `columns` — Primary Keys & Quality Checks
+
+The report has **3 primary keys** — the combination of `trip_date + taxi_type + payment_type_name` uniquely identifies each row (one row per day, taxi type, and payment method):
+
+```yaml
+columns:
+  - name: trip_date          # primary_key: true
+  - name: taxi_type          # primary_key: true
+  - name: payment_type_name  # primary_key: true
+  - name: trip_count
+    checks:
+      - name: positive        # must be > 0
+  - name: total_passengers / total_distance / total_fare / total_tips / total_revenue
+    checks:
+      - name: non_negative    # must be >= 0
+  - name: avg_fare / avg_trip_distance / avg_passengers
+    # no check — if sums pass, averages are implicitly valid
+```
+
+- **`positive` on `trip_count`** — must be **> 0**. Every group must have at least one trip; a zero here would indicate a pipeline bug.
+- **`non_negative` on totals** — must be **≥ 0**. Slightly looser than `positive` because a group could theoretically have a $0 total.
+- **No check on averages** — derived metrics; if the sum checks pass, averages are implicitly valid.
+
+#### SQL Query Logic
+
+```sql
+SELECT
+    CAST(tpep_pickup_datetime AS DATE)      AS trip_date,
+    COALESCE(taxi_type, 'Unknown')          AS taxi_type,
+    COALESCE(payment_type_name, 'Unknown')  AS payment_type_name,
+    COUNT(*)                                AS trip_count,
+    SUM(passenger_count)                    AS total_passengers,
+    ROUND(SUM(trip_distance), 2)            AS total_distance,
+    ROUND(SUM(fare_amount), 2)              AS total_fare,
+    ROUND(SUM(tip_amount), 2)               AS total_tips,
+    ROUND(SUM(total_amount), 2)             AS total_revenue,
+    ROUND(AVG(fare_amount), 4)              AS avg_fare,
+    ROUND(AVG(trip_distance), 4)            AS avg_trip_distance,
+    ROUND(AVG(passenger_count), 4)          AS avg_passengers
+FROM staging.trips
+WHERE tpep_pickup_datetime >= '{{ start_datetime }}'
+  AND tpep_pickup_datetime <  '{{ end_datetime }}'
+GROUP BY
+    CAST(tpep_pickup_datetime AS DATE),
+    COALESCE(taxi_type, 'Unknown'),
+    COALESCE(payment_type_name, 'Unknown')
+```
+
+| Part | Purpose |
+|---|---|
+| `CAST(... AS DATE)` | Truncates timestamp → date for daily aggregation |
+| `COALESCE(..., 'Unknown')` | Handles NULLs so they don't silently disappear from `GROUP BY` |
+| `{{ start_datetime }}` / `{{ end_datetime }}` | Bruin injects these at runtime based on the scheduled / backfill window |
+| `WHERE` on `tpep_pickup_datetime` | Filters staging data to this run's time window **before** grouping |
+| `GROUP BY` | Collapses all trips for a (date, taxi type, payment method) into one row |
+| `ROUND(..., 2)` on totals | Keeps money/distance to 2 decimal places |
+| `ROUND(..., 4)` on averages | Keeps averages slightly more precise |
+
+> **Pipeline flow summary**: raw ingestion → staging (deduplicated, enriched, validated) → **reports** (aggregated, dashboard-ready). This is the table a BI tool would query.
 
 ### Running the Pipeline
 

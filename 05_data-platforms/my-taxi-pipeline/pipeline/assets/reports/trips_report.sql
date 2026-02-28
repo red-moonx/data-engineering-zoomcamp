@@ -1,59 +1,99 @@
 /* @bruin
 
-# Docs:
-# - SQL assets: https://getbruin.com/docs/bruin/assets/sql
-# - Materialization: https://getbruin.com/docs/bruin/assets/materialization
-# - Quality checks: https://getbruin.com/docs/bruin/quality/available_checks
+name: reports.trips_report
+type: duckdb.sql
 
-# TODO: Set the asset name (recommended: reports.trips_report).
-name: TODO_SET_ASSET_NAME
-
-# TODO: Set platform type.
-# Docs: https://getbruin.com/docs/bruin/assets/sql
-# suggested type: duckdb.sql
-type: TODO
-
-# TODO: Declare dependency on the staging asset(s) this report reads from.
 depends:
-  - TODO_DEP_STAGING_ASSET
+  - staging.trips
 
-# TODO: Choose materialization strategy.
-# For reports, `time_interval` is a good choice to rebuild only the relevant time window.
-# Important: Use the same `incremental_key` as staging (e.g., pickup_datetime) for consistency.
 materialization:
   type: table
-  # suggested strategy: time_interval
-  strategy: TODO
-  # TODO: set to your report's date column
-  incremental_key: TODO
-  # TODO: set to `date` or `timestamp`
-  time_granularity: TODO
+  strategy: time_interval
+  incremental_key: trip_date
+  time_granularity: date
 
-# TODO: Define report columns + primary key(s) at your chosen level of aggregation.
 columns:
-  - name: TODO_dim
-    type: TODO
-    description: TODO
-    primary_key: true
-  - name: TODO_date
+  - name: trip_date
     type: DATE
-    description: TODO
+    description: Date of the trip (based on pickup_datetime)
     primary_key: true
-  - name: TODO_metric
+  - name: taxi_type
+    type: VARCHAR
+    description: Type of taxi (yellow, green)
+    primary_key: true
+  - name: payment_type_name
+    type: VARCHAR
+    description: Payment method name (credit card, cash, etc.)
+    primary_key: true
+  - name: trip_count
     type: BIGINT
-    description: TODO
+    description: Total number of trips
+    checks:
+      - name: positive
+  - name: total_passengers
+    type: BIGINT
+    description: Total number of passengers
     checks:
       - name: non_negative
+  - name: total_distance
+    type: DOUBLE
+    description: Total trip distance in miles
+    checks:
+      - name: non_negative
+  - name: total_fare
+    type: DOUBLE
+    description: Total fare amount
+    checks:
+      - name: non_negative
+  - name: total_tips
+    type: DOUBLE
+    description: Total tips collected
+    checks:
+      - name: non_negative
+  - name: total_revenue
+    type: DOUBLE
+    description: Total revenue (total_amount)
+    checks:
+      - name: non_negative
+  - name: avg_fare
+    type: DOUBLE
+    description: Average fare per trip
+  - name: avg_trip_distance
+    type: DOUBLE
+    description: Average trip distance in miles
+  - name: avg_passengers
+    type: DOUBLE
+    description: Average passengers per trip
 
 @bruin */
 
--- Purpose of reports:
--- - Aggregate staging data for dashboards and analytics
--- Required Bruin concepts:
--- - Filter using `{{ start_datetime }}` / `{{ end_datetime }}` for incremental runs
--- - GROUP BY your dimension + date columns
+SELECT
+    CAST(tpep_pickup_datetime AS DATE)      AS trip_date,
+    COALESCE(taxi_type, 'Unknown')          AS taxi_type,
+    COALESCE(payment_type_name, 'Unknown')  AS payment_type_name,
 
-SELECT * -- TODO: replace with your aggregation logic
+    COUNT(*)                                AS trip_count,
+    SUM(passenger_count)                    AS total_passengers,
+    ROUND(SUM(trip_distance), 2)            AS total_distance,
+    ROUND(SUM(fare_amount), 2)              AS total_fare,
+    ROUND(SUM(tip_amount), 2)               AS total_tips,
+    ROUND(SUM(total_amount), 2)             AS total_revenue,
+
+    ROUND(AVG(fare_amount), 4)              AS avg_fare,
+    ROUND(AVG(trip_distance), 4)            AS avg_trip_distance,
+    ROUND(AVG(passenger_count), 4)          AS avg_passengers
+
 FROM staging.trips
-WHERE pickup_datetime >= '{{ start_datetime }}'
-  AND pickup_datetime < '{{ end_datetime }}'
+
+WHERE tpep_pickup_datetime >= '{{ start_datetime }}'
+  AND tpep_pickup_datetime <  '{{ end_datetime }}'
+
+GROUP BY
+    CAST(tpep_pickup_datetime AS DATE),
+    COALESCE(taxi_type, 'Unknown'),
+    COALESCE(payment_type_name, 'Unknown')
+
+ORDER BY
+    trip_date,
+    taxi_type,
+    payment_type_name
