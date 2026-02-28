@@ -1,0 +1,10 @@
+# Bruin — credentials file (never push to git)
+.bruin.yml
+
+# Bruin — local DuckDB database file
+duckdb.db
+
+# Bruin — run logs
+logs/runs
+logs/*.log
+logs/queries

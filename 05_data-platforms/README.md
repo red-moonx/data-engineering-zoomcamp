@@ -280,9 +280,195 @@ All assets declare dependencies on each other, so Bruin builds a lineage graph a
 bruin init zoomcamp my-taxi-pipeline
 ```
 
+This initialises the project from the `zoomcamp` template, which includes a pre-built three-layer folder structure under `pipeline/assets/` (ingestion, staging, reports) with placeholder assets ready to fill in.
+
+The first thing we configure is `pipeline.yml`, which defines the global settings for the entire pipeline:
+
+```yaml
+name: nyc-taxi          # shown in logs and exposed as BRUIN_PIPELINE to Python assets
+schedule: daily         # pipeline runs once a day
+start_date: "2022-01-01"  # earliest date used when doing a full-refresh backfill
+
+default_connections:
+  duckdb: duckdb-default  # all assets use this DuckDB connection unless they override it
+
+variables:
+  taxi_types:
+    type: array
+    items:
+      type: string
+    default: ["yellow"]   # which taxi types to ingest; can be overridden with --var at runtime
+```
+
+- **`name`** — a human-readable identifier that appears in Bruin logs and is injected as the `BRUIN_PIPELINE` environment variable inside Python assets.
+- **`schedule`** — tells Bruin how often to run the pipeline automatically. Here `daily` means once per day.
+- **`start_date`** — the earliest date Bruin will consider when running a full refresh. Data before this date is never processed.
+- **`default_connections`** — sets `duckdb-default` as the default DuckDB connection for every asset in the pipeline, so individual assets don't need to repeat it.
+- **`variables`** — pipeline-level variables defined using JSON Schema. `taxi_types` is an array of strings defaulting to `["yellow"]`. It can be overridden at runtime (e.g. `--var taxi_types='["yellow","green"]'`) and is read inside Python assets via the `BRUIN_VARS` environment variable.
+
 ### Ingestion Layer
 
-> Clarifications will be added here as we go through the video.
+The ingestion layer is responsible for pulling raw data from external sources and landing it in the database **as-is**, without any cleaning or transformations. There are two assets:
+
+1. **`trips.py`** — Python asset that fetches NYC Taxi parquet files from the TLC public endpoint
+2. **`payment_lookup.asset.yml`** — Seed asset that loads a static CSV lookup table
+
+#### Python asset: `trips.py`
+
+The Bruin header is embedded inside the Python docstring at the top of the file:
+
+```python
+"""@bruin
+name: ingestion.trips
+type: python
+image: python:3.11
+connection: duckdb-default
+
+materialization:
+  type: table
+  strategy: append
+@bruin"""
+```
+
+- **`type: python`** — tells Bruin this is a Python asset (as opposed to SQL or YAML)
+- **`image: python:3.11`** — Bruin runs Python assets in an isolated environment using this image, so we never pollute the host machine
+- **`connection: duckdb-default`** — the destination where the returned DataFrame will be loaded
+- **`materialization: type: table / strategy: append`** — each run *appends* new rows to the `ingestion.trips` table without touching existing rows. We keep raw data accumulating here; deduplication happens downstream in the staging layer
+
+#### The `materialize()` function
+
+Instead of writing SQL to insert data, we define a `materialize()` function that **returns a DataFrame** — Bruin takes care of the actual insert:
+
+```python
+def materialize():
+    start_date = datetime.strptime(os.environ["BRUIN_START_DATE"], "%Y-%m-%d")
+    end_date   = datetime.strptime(os.environ["BRUIN_END_DATE"],   "%Y-%m-%d")
+    taxi_types = json.loads(os.environ.get("BRUIN_VARS", "{}")).get("taxi_types", ["yellow"])
+
+    base_url = "https://d37ci6vzurychx.cloudfront.net/trip-data"
+
+    frames = []
+    for taxi_type in taxi_types:
+        current = start_date.replace(day=1)      # snap to first of month
+        while current <= end_date:
+            url = f"{base_url}/{taxi_type}_tripdata_{current:%Y}-{current:%m}.parquet"
+            df  = pd.read_parquet(io.BytesIO(requests.get(url).content))
+            df["taxi_type"]    = taxi_type
+            df["extracted_at"] = datetime.utcnow().isoformat()
+            frames.append(df)
+            current += relativedelta(months=1)
+
+    return pd.concat(frames, ignore_index=True)
+```
+
+Key points:
+
+| Detail | Why |
+|--------|-----|
+| `BRUIN_START_DATE` / `BRUIN_END_DATE` | Bruin injects the run's date window as env vars; we use them to know which monthly parquet files to download |
+| `BRUIN_VARS` | Pipeline variables (like `taxi_types`) are passed as a JSON string in this env var |
+| Snap `start_date` to first of month | TLC publishes one file per calendar month, so we always start at the 1st |
+| `taxi_type` column | Added so we can filter by taxi type in staging / reports |
+| `extracted_at` column | A lineage/debugging column that records when each batch was fetched |
+| Return a DataFrame | Bruin materialises it into the destination automatically — no manual SQL inserts needed |
+
+#### How `materialize()` works — step by step
+
+**The big picture:** Bruin calls `materialize()` and expects a DataFrame back. It then handles inserting that data into `ingestion.trips` using the `append` strategy. You don't write any SQL — you just return data.
+
+**Step 1 — Read the run context from env vars**
+
+```python
+start_date = datetime.strptime(os.environ["BRUIN_START_DATE"], "%Y-%m-%d")
+end_date   = datetime.strptime(os.environ["BRUIN_END_DATE"],   "%Y-%m-%d")
+taxi_types = json.loads(os.environ.get("BRUIN_VARS", "{}")).get("taxi_types", ["yellow"])
+```
+
+When Bruin runs the asset it injects these env variables automatically:
+- `BRUIN_START_DATE` — e.g. `"2022-01-01"`
+- `BRUIN_END_DATE` — e.g. `"2022-03-01"`
+- `BRUIN_VARS` — e.g. `'{"taxi_types": ["yellow"]}'` — the pipeline variable from `pipeline.yml`
+
+**Step 2 — Figure out which files to download**
+
+```python
+current = start_date.replace(day=1)   # always start at day 1 of the month
+while current <= end_date:
+    url = f"{base_url}/{taxi_type}_tripdata_{current:%Y}-{current:%m}.parquet"
+    current += relativedelta(months=1)  # move to next month
+```
+
+The TLC publishes one `.parquet` file per taxi type per month, e.g.:
+```
+yellow_tripdata_2022-01.parquet
+yellow_tripdata_2022-02.parquet
+```
+We loop month by month and build the URL for each file.
+
+**Step 3 — Download and read each file**
+
+```python
+df = pd.read_parquet(io.BytesIO(requests.get(url).content))
+df["taxi_type"]    = taxi_type          # yellow / green
+df["extracted_at"] = datetime.utcnow()  # when we fetched it
+```
+
+We download the `.parquet` as raw bytes and load it straight into a DataFrame (no saving to disk). We also add two extra columns: `taxi_type` (useful later in staging/reports) and `extracted_at` (for debugging/lineage).
+
+**Step 4 — Return everything**
+
+```python
+return pd.concat(frames, ignore_index=True)
+```
+
+Stack all the monthly DataFrames into one big DataFrame and return it. Bruin **appends** those rows to `ingestion.trips` in DuckDB.
+
+> **In plain English:** *"For each month in the date window Bruin gave me, download the NYC taxi file for that month, add a couple of extra columns, and hand all the data back to Bruin to store."*
+
+#### Testing the ingestion asset (one month)
+
+Before building the rest of the pipeline, we test just the ingestion asset with a single month of data:
+
+```bash
+bruin run 05_data-platforms/my-taxi-pipeline/pipeline/assets/ingestion/trips.py \
+  --environment default \
+  --start-date 2022-01-01 \
+  --end-date 2022-01-31
+```
+
+> **Note:** Run this from the **git root** (`/workspaces/data-engineering-zoomcamp`), not from inside the asset folder. Bruin needs to find `.bruin.yml` at the git root.
+
+Expected output:
+```
+✓ Successfully validated 1 assets across 1 pipeline, all good.
+
+Interval: 2022-01-01T00:00:00Z - 2022-01-31T00:00:00Z
+
+[09:16:06] >> Fetching: https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2022-01.parquet
+[09:16:11] >>   ✓ 2,463,931 rows loaded
+[09:17:06] Finished: ingestion.trips (1m7.764s)
+
+PASS ingestion.trips
+
+bruin run completed successfully in 1m7.765s
+ ✓ Assets executed      1 succeeded
+```
+
+Verify the data:
+
+```bash
+bruin query --connection duckdb-default --query "SELECT COUNT(*) FROM ingestion.trips"
+```
+
+```
+┌──────────────┐
+│ COUNT_STAR() │
+├──────────────┤
+│ 2463931      │
+└──────────────┘
+```
+
+**2,463,931 rows** from January 2022 loaded into `ingestion.trips` in DuckDB. ✅
 
 ### Staging Layer
 
