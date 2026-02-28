@@ -335,6 +335,20 @@ materialization:
 - **`connection: duckdb-default`** — the destination where the returned DataFrame will be loaded
 - **`materialization: type: table / strategy: append`** — each run *appends* new rows to the `ingestion.trips` table without touching existing rows. We keep raw data accumulating here; deduplication happens downstream in the staging layer
 
+#### `requirements.txt`
+
+Python dependencies for the asset are declared in a `requirements.txt` file in the same folder:
+
+```
+pandas==2.2.0
+requests==2.31.0
+pyarrow==15.0.0
+python-dateutil==2.8.2
+```
+
+**Bruin handles this automatically** — when it runs the asset, it reads `requirements.txt` and installs the packages into an isolated environment before executing the script. You don't need to install anything manually.
+
+
 #### The `materialize()` function
 
 Instead of writing SQL to insert data, we define a `materialize()` function that **returns a DataFrame** — Bruin takes care of the actual insert:
@@ -425,6 +439,83 @@ Stack all the monthly DataFrames into one big DataFrame and return it. Bruin **a
 
 > **In plain English:** *"For each month in the date window Bruin gave me, download the NYC taxi file for that month, add a couple of extra columns, and hand all the data back to Bruin to store."*
 
+#### Seed asset: `payment_lookup.asset.yml`
+
+The second ingestion asset is a **seed file** — a small, static reference table loaded from a CSV that lives in the repo. The two files work as a pair:
+
+**`payment_lookup.csv`** — the actual data, written by hand:
+```csv
+payment_type_id,payment_type_name
+1,credit_card
+2,cash
+3,no_charge
+4,dispute
+```
+
+**`payment_lookup.asset.yml`** — tells Bruin how to load it:
+```yaml
+name: ingestion.payment_lookup
+type: duckdb.seed
+parameters:
+  path: payment_lookup.csv
+columns:
+  - name: payment_type_id
+    type: integer
+    primary_key: true
+    checks: [not_null, unique]
+  - name: payment_type_name
+    type: string
+    checks: [not_null]
+```
+
+**Why do we need this?** The TLC trip data only gives us a numeric code (`payment_type = 1`, `2`...). The meaning of those numbers isn't in the data — TLC documents them separately. So we create this lookup table and load it into DuckDB so the staging layer can JOIN it:
+
+```
+TLC parquet file                  payment_lookup table
+-------------------               ----------------------
+payment_type = 1    →  JOIN  →    payment_type_name = "credit_card"
+payment_type = 2    →  JOIN  →    payment_type_name = "cash"
+```
+
+Without it, we'd just have meaningless numbers in our final tables. Why a lookup table instead of a `CASE` statement in SQL? It's easier to maintain (just update the CSV), reusable across multiple assets, and Bruin validates it with quality checks on load.
+
+#### Running the seed asset
+
+```bash
+bruin run \
+  --start-date 2022-01-01T00:00:00.000Z \
+  --end-date 2022-01-30T23:59:59.999999999Z \
+  --environment default \
+  "05_data-platforms/my-taxi-pipeline/pipeline/assets/ingestion/payment_lookup.asset.yml"
+```
+
+Output:
+```
+✓ Successfully validated 2 assets across 1 pipeline, all good.
+
+[10:39:14] Running:  ingestion.payment_lookup
+[10:39:14] >>   Source: csv / seed.raw
+[10:39:14] >>   Destination: duckdb / ingestion.payment_lookup
+[10:39:14] >>   Incremental Strategy: replace
+[10:39:14] >>   Primary Key: ['payment_type_id']
+[10:39:14] >> Successfully finished loading data from 'csv' to 'duckdb' in 0.41 seconds
+[10:39:15] Finished: ingestion.payment_lookup (5.64s)
+[10:39:15] Running:  ingestion.payment_lookup:payment_type_name:not_null
+[10:39:15] Running:  ingestion.payment_lookup:payment_type_id:not_null
+[10:39:15] Running:  ingestion.payment_lookup:payment_type_id:unique
+[10:39:15] Finished: ingestion.payment_lookup:payment_type_name:not_null (80ms)
+[10:39:15] Finished: ingestion.payment_lookup:payment_type_id:not_null (150ms)
+[10:39:15] Finished: ingestion.payment_lookup:payment_type_id:unique (296ms)
+
+PASS ingestion.payment_lookup ...
+
+bruin run completed successfully in 5.937s
+ ✓ Assets executed      1 succeeded
+ ✓ Quality checks       3 succeeded
+```
+
+After loading the 7 rows from the CSV, Bruin automatically ran **3 quality checks** defined in the asset (not_null on both columns + unique on the ID). All passed. ✅
+
 #### Testing the ingestion asset (one month)
 
 Before building the rest of the pipeline, we test just the ingestion asset with a single month of data:
@@ -472,7 +563,135 @@ bruin query --connection duckdb-default --query "SELECT COUNT(*) FROM ingestion.
 
 ### Staging Layer
 
-> Clarifications will be added here as we go through the video.
+The staging layer has one asset: **`staging/trips.sql`** — a SQL asset that reads from both ingestion tables, cleans and enriches the data, and writes to `staging.trips`.
+
+#### Bruin header (`trips.sql`)
+
+```yaml
+name: staging.trips
+type: duckdb.sql
+
+depends:
+  - ingestion.trips
+  - ingestion.payment_lookup
+
+materialization:
+  type: table
+  strategy: time_interval
+  incremental_key: pickup_datetime
+  time_granularity: timestamp
+
+custom_checks:
+  - name: row_count_positive
+    description: Ensures the table is not empty
+    query: SELECT COUNT(*) > 0 FROM staging.trips
+    value: 1
+```
+
+Key points:
+
+| Field | Value | Why |
+|-------|-------|-----|
+| `depends` | `ingestion.trips`, `ingestion.payment_lookup` | Tells Bruin to run ingestion first; also powers the lineage graph |
+| `strategy: time_interval` | — | On each run Bruin **deletes** rows in the time window, then **inserts** the query result — safe reprocessing |
+| `incremental_key: pickup_datetime` | — | The column Bruin uses to identify which rows belong to the current window |
+| `custom_checks` | `COUNT(*) > 0` → must equal `1` | Ensures staging didn't produce an empty table |
+
+#### Why `time_interval` and not `append`?
+
+The ingestion layer uses `append` (raw data accumulates). The staging layer uses `time_interval` so we can safely **reprocess** any time window without duplicating rows — perfect for backfilling or re-running a broken day.
+
+#### The SELECT query — 4 staging rules
+
+The template comments list 4 things every staging asset should do:
+
+```sql
+SELECT
+    t.pickup_datetime,
+    t.dropoff_datetime,
+    t.pu_location_id,
+    t.do_location_id,
+    t.passenger_count,
+    t.trip_distance,
+    t.fare_amount,
+    t.tip_amount,
+    t.total_amount,
+    p.payment_type_name,   -- (3) enriched from lookup
+    t.taxi_type,
+    t.extracted_at
+
+FROM ingestion.trips t
+LEFT JOIN ingestion.payment_lookup p   -- (3) enrich with JOIN
+    ON t.payment_type = p.payment_type_id
+
+WHERE
+    t.pickup_datetime >= '{{ start_datetime }}'  -- (1) time window filter
+    AND t.pickup_datetime < '{{ end_datetime }}'
+    AND t.pickup_datetime IS NOT NULL             -- (4) drop invalid rows
+    AND t.fare_amount >= 0
+
+QUALIFY ROW_NUMBER() OVER (                       -- (2) deduplicate
+    PARTITION BY t.pickup_datetime, t.dropoff_datetime,
+                 t.pu_location_id, t.do_location_id,
+                 t.fare_amount, t.taxi_type
+    ORDER BY t.extracted_at DESC
+) = 1
+```
+
+| Rule | Technique | Reason |
+|------|-----------|--------|
+| 1. Filter to time window | `WHERE pickup_datetime >= '{{ start_datetime }}'` | Required by `time_interval` — without it you'd insert all data but only delete the window → duplicates |
+| 2. Deduplicate | `QUALIFY ROW_NUMBER() = 1` | Ingestion uses `append`, so re-runs can land the same trip twice; keep the latest copy |
+| 3. Enrich with JOINs | `LEFT JOIN ingestion.payment_lookup` | Replaces `payment_type = 1` with `payment_type_name = "credit_card"` |
+| 4. Filter invalid rows | `IS NOT NULL`, `fare_amount >= 0` | Drop rows that can't be used in reports |
+
+
+#### Running the staging asset
+
+```bash
+bruin run 05_data-platforms/my-taxi-pipeline/pipeline/assets/staging/trips.sql \
+  --environment default \
+  --start-date 2022-01-01 \
+  --end-date 2022-01-31 \
+  --full-refresh
+```
+
+```
+PASS staging.trips
+
+bruin run completed successfully in 4.983s
+ ✓ Assets executed      1 succeeded
+ ✓ Quality checks       1 succeeded
+```
+
+#### Gotchas we hit
+
+**1. First run fails without `--full-refresh`**
+
+```
+Catalog Error: Table with name trips does not exist!
+LINE 2: DELETE FROM staging.trips WHERE pickup_datetime BETWEEN ...
+```
+
+The `time_interval` strategy always tries to **DELETE** rows from the table before inserting — but `staging.trips` doesn't exist on the very first run. Fix: pass `--full-refresh` on the first run. It skips the DELETE and does a clean `CREATE TABLE AS SELECT` instead. Subsequent runs work normally without the flag.
+
+**2. Wrong column names — TLC uses `tpep_` prefix**
+
+```
+Binder Error: Table "t" does not have a column named "pickup_datetime"
+Candidate bindings: "tpep_pickup_datetime"
+```
+
+The yellow taxi TLC parquet files use `tpep_pickup_datetime` / `tpep_dropoff_datetime` (tpep = Taxicab Passenger Enhancement Program), not plain `pickup_datetime`. We discovered the real column names by querying the schema:
+
+```sql
+SELECT column_name, data_type
+FROM information_schema.columns
+WHERE table_name = 'trips' AND table_schema = 'ingestion'
+ORDER BY ordinal_position;
+```
+
+Fix: replace all references to `pickup_datetime` / `dropoff_datetime` with `tpep_pickup_datetime` / `tpep_dropoff_datetime` — including the `incremental_key` in the Bruin header.
 
 ### Reports Layer
 
