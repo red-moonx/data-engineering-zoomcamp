@@ -186,6 +186,8 @@ FROM dataset.players
 GROUP BY 1
 ```
 
+In short, `player_stats.sql` reads from `dataset.players` (populated by the Chess.com ingestion asset) and groups records by player name, producing a count of entries per player stored as the `dataset.player_stats` table in DuckDB. Since it declares `dataset.players` as a dependency, Bruin always runs it after ingestion completes. On top of the SQL, it runs built-in and custom data quality checks automatically after the query finishes.
+
 The asset also defines **quality checks** on the output columns (e.g. `not_null`, `unique`, `positive`) and a **custom check** that verifies the result table is not empty — Bruin runs these automatically after the query completes.
 
 ---
@@ -255,4 +257,42 @@ Once the pipeline has run, you can query the data directly via the Bruin CLI:
 bruin query --connection duckdb-default --query "SELECT * FROM dataset.players LIMIT 10"
 bruin query --connection duckdb-default --query "SELECT * FROM dataset.player_stats"
 ```
+
+---
+
+## NYC Taxi Pipeline (End-to-End)
+
+This section covers building a full three-layer pipeline using NYC Taxi data and DuckDB, following the Bruin zoomcamp template.
+
+### Architecture
+
+The pipeline is structured in three layers:
+
+1. **Ingestion** — extract raw data and load it into the database as-is
+2. **Staging** — clean, transform, deduplicate, and join with lookup tables
+3. **Reports** — aggregate data into summary tables for analysis
+
+All assets declare dependencies on each other, so Bruin builds a lineage graph and runs them in the correct order automatically.
+
+### Project Setup
+
+```bash
+bruin init zoomcamp my-taxi-pipeline
+```
+
+### Ingestion Layer
+
+> Clarifications will be added here as we go through the video.
+
+### Staging Layer
+
+> Clarifications will be added here as we go through the video.
+
+### Reports Layer
+
+> Clarifications will be added here as we go through the video.
+
+### Running the Pipeline
+
+> Clarifications will be added here as we go through the video.
 
