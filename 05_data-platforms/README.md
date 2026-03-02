@@ -793,5 +793,67 @@ GROUP BY
 
 ### Running the Pipeline
 
-> Clarifications will be added here as we go through the video.
+To run the full pipeline end-to-end, we use `bruin run` pointing at `pipeline.yml`:
 
+```bash
+bruin run \
+  --start-date 2025-01-01T00:00:00.000Z \
+  --end-date 2025-01-31T23:59:59.999999999Z \
+  --environment default \
+  "05_data-platforms/my-taxi-pipeline/pipeline/pipeline.yml"
+```
+
+Bruin builds the lineage graph from the `depends` declarations and executes all four assets in order:
+
+```
+ingestion.payment_lookup  ─┐
+                            ├─→  staging.trips  →  reports.trips_report
+ingestion.trips           ─┘
+```
+
+Successful output:
+
+```
+PASS ingestion.payment_lookup ...
+PASS ingestion.trips
+PASS staging.trips .
+PASS reports.trips_report ......
+
+bruin run completed successfully in 23.651s
+ ✓ Assets executed      4 succeeded
+ ✓ Quality checks       10 succeeded
+```
+
+#### Gotcha: `ingestion.payment_lookup` fails when both ingestion assets run at the same time
+
+On the first full pipeline run we saw this error:
+
+```
+FAIL ingestion.payment_lookup UUU
+PASS ingestion.trips
+UPSTREAM FAILED reports.trips_report UUUUUU
+UPSTREAM FAILED staging.trips U
+
+ ✗ Assets executed      1 failed / 1 succeeded / 2 skipped
+ ✗ Quality checks       10 skipped
+```
+
+**Root cause:** DuckDB is a file-based, single-writer database — it only allows one process to write to the `.db` file at a time. When Bruin runs `ingestion.payment_lookup` and `ingestion.trips` concurrently (they have no dependency between each other, so Bruin parallelises them), both try to write to `duckdb.db` simultaneously, causing a write lock conflict that makes `payment_lookup` fail with `exit status 1`. Because `staging.trips` and `reports.trips_report` both depend on `ingestion.payment_lookup`, they are skipped as `UPSTREAM FAILED`.
+
+**Fix:** Simply re-running the pipeline is usually sufficient — on the second attempt the timing is different and the conflict doesn't occur. Both assets complete, all quality checks pass, and the downstream assets run normally. If the conflict recurs consistently, the workaround is to run the two ingestion assets sequentially (run `payment_lookup` alone first, then run the rest).
+
+---
+
+> [!NOTE]
+> **FYI: What happens to existing data when you re-run with a wider date range?**
+>
+> If you run the pipeline again with a larger window (e.g. Jan 2022 → Dec 2025) after data already exists in the tables, here is what happens per layer:
+>
+> | Layer | Strategy | Behaviour on re-run |
+> |---|---|---|
+> | `ingestion.trips` | `append` | Existing rows **stay** — new rows are appended. Any already-loaded months (e.g. Jan 2022, Jan 2025) will be duplicated in the raw table. This is intentional; deduplication happens in staging. |
+> | `ingestion.payment_lookup` | `replace` | Table is **fully wiped and reloaded** from the CSV every time. Safe — it's static data. |
+> | `staging.trips` | `time_interval` | For each date window, Bruin **deletes existing rows first, then re-inserts** the query result. Previously loaded months are safely reprocessed (the `QUALIFY ROW_NUMBER()` dedup handles the raw duplicates). All new months are inserted fresh. |
+> | `reports.trips_report` | `time_interval` | Same as staging — existing windows are replaced cleanly, new windows are inserted fresh. |
+>
+> **Bottom line:** re-running is safe and idempotent at the staging and reports layers. The `time_interval` strategy is specifically designed for backfilling large date ranges. Raw ingestion accumulates duplicates by design, but they are deduplicated before reaching the reports layer.
