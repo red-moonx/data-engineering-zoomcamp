@@ -4,6 +4,9 @@ This repository contains my work for the [Data Engineering Zoomcamp](https://git
 
 ---
 
+
+
+
 ## 📚 Course Curriculum
 
 The course is composed of the following modules:
@@ -53,3 +56,5 @@ The course is composed of the following modules:
 ### 🎓 Final Project
 - Apply all concepts learned in a real-world scenario
 - Peer review and feedback process
+
+![alt text](image.png)
