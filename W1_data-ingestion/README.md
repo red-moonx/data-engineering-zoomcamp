@@ -144,3 +144,106 @@ In the workshop, Cursor is the recommended IDE. Here, we're replicating the same
 
 
 ## dlt Demo (AI-assisted)
+
+### Step 1: Create a New Project Folder
+
+Create a dedicated folder for the AI-assisted pipeline, separate from the traditional demo:
+
+```bash
+mkdir dlt-ai-workshop
+cd dlt-ai-workshop
+```
+
+### Step 2: Initialize a uv Project
+
+Instead of using a global Python environment, we use `uv` to create an isolated, reproducible project:
+
+```bash
+uv init
+```
+
+This generates:
+- `pyproject.toml` — project metadata and dependency list
+- `.python-version` — pins the Python version
+- `.venv/` — virtual environment (created automatically on first `uv add`)
+
+### Step 3: Install dlt with Workspace Extras
+
+```bash
+uv add "dlt[workspace]==1.22.2"
+```
+
+The `[workspace]` extra installs the `dlt init` CLI scaffolding tool, along with all core dlt dependencies (DuckDB, marimo, ibis-framework, etc.). *Note: We pin to `1.22.2` to match the exact behavior of the workshop video, as `1.23.0` introduced significant CLI changes.* `uv` manages the `.venv` automatically — no manual activation needed.
+
+> **Why `uv` instead of plain `pip`?**  
+> `uv` creates a project-level virtual environment (`.venv/`) so dependencies are fully isolated. It's also significantly faster than `pip` and keeps a `pyproject.toml` as a reproducible record of dependencies.
+
+### Step 4: Scaffold the dlt Workspace
+
+```bash
+uv run dlt init dlthub:open_library duckdb
+```
+
+This scaffolds a generic REST API pipeline template. The files created are:
+
+| File | Purpose |
+|------|---------|
+| `open_library_pipeline.py` | Main pipeline file — source, pipeline config, and runner |
+| `.dlt/` | Local dlt config folder (credentials, settings) |
+| `.gitignore` | Pre-configured to exclude secrets and `.venv` |
+
+#### What's inside `open_library_pipeline.py`?
+
+The scaffolded file follows the same 3-step pattern we already know (source → pipeline → run), but the **configuration is not filled in yet** — it only contains placeholders:
+
+```python
+config: RESTAPIConfig = {
+    "client": {
+        # TODO set base URL for the REST API
+        "base_url": "https://example.com/v1/",
+        # TODO configure the right authentication method or remove
+        "auth": {"type": "bearer", "token": access_token},
+    },
+    "resources": [
+        # TODO define resources per endpoint
+    ],
+}
+```
+
+This is intentional — **the LLM agent is responsible for filling in the correct configuration** (base URL, endpoints, pagination, auth, etc.) based on the Open Library API spec. This is the core of the AI-assisted workflow.
+
+> **Note:** `dlt` prints a deprecation warning suggesting `dlt ai init` instead of `dlthub:<source>`. The new command `uv run dlt ai init` starts an interactive AI-guided workflow. Both approaches work; the workshop uses the `dlthub:` syntax for compatibility.
+
+### Step 5: Install dlt AI Rules for the Agent
+
+When using Cursor, `dlt init` automatically generates `.cursor/rules/*.mdc` files. Since we are using Antigravity (a Gemini-based agent), we can explicitly generate the equivalent rules and skills for our agent using the dlt AI toolkit:
+
+```bash
+uv run dlt ai toolkit rest-api-pipeline install --agent claude
+mv .claude .gemini
+```
+
+*(Note: We use the `claude` template because dlt doesn't have a native `gemini` one yet, but the markdown rules are agent-agnostic so we just rename the folder).*
+
+This creates a `.gemini/` directory containing two key folders:
+- `rules/`: Contains the workflow instructions (e.g., `rest-api-pipeline-workflow.md`, `init-dlthub-workspace.md`) detailing best practices for writing dlt pipelines.
+- `skills/`: Contains specific task guidelines (e.g., `find-source`, `create-rest-api-pipeline`, `validate-data`, `setup-secrets`).
+
+**How to use them:** While Cursor automatically injects its `.mdc` rules, for Antigravity, we can explicitly ask the agent to `"read the .gemini rules and skills before writing the pipeline"` to ensure it follows dlt's official, battle-tested guidelines. The dlt MCP server provides complimentary access to the docs on-demand.
+
+---
+
+### ⏸️ Current Progress (Where we left off)
+
+To recap, we have **fully prepared the workspace for AI-assisted ingestion**. By pinning dlt to version `1.22.2`, we successfully replicated the exact environment from the workshop video. 
+
+In our `dlt-ai-workshop/` folder, we now have:
+1. **The Target:** `open_library_pipeline.py` (the starter pipeline file with configuration placeholders)
+2. **The Context:** `open_library-docs.yaml` (the OpenAPI spec explaining how the API works, fetched natively by `dlt init`)
+3. **The Rules:** `.gemini/rules/` and `.gemini/skills/` (the persistent system instructions for the LLM on how to write dlt code correctly)
+
+#### 🚀 Next Step
+The next step is to actually write the prompt that instructs the AI (Antigravity) to:
+- Read the `.gemini` rules to understand best practices
+- Read the `open_library-docs.yaml` to understand the API parameters and pagination
+- Fill in the placeholders in `open_library_pipeline.py` to create a working REST API pipeline.
