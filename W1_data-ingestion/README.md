@@ -233,17 +233,45 @@ This creates a `.gemini/` directory containing two key folders:
 
 ---
 
-### ⏸️ Current Progress (Where we left off)
 
-To recap, we have **fully prepared the workspace for AI-assisted ingestion**. By pinning dlt to version `1.22.2`, we successfully replicated the exact environment from the workshop video. 
-
-In our `dlt-ai-workshop/` folder, we now have:
-1. **The Target:** `open_library_pipeline.py` (the starter pipeline file with configuration placeholders)
-2. **The Context:** `open_library-docs.yaml` (the OpenAPI spec explaining how the API works, fetched natively by `dlt init`)
-3. **The Rules:** `.gemini/rules/` and `.gemini/skills/` (the persistent system instructions for the LLM on how to write dlt code correctly)
-
-#### 🚀 Next Step
+### Step 6: running the prompt to fill in the pipeline
 The next step is to actually write the prompt that instructs the AI (Antigravity) to:
 - Read the `.gemini` rules to understand best practices
 - Read the `open_library-docs.yaml` to understand the API parameters and pagination
 - Fill in the placeholders in `open_library_pipeline.py` to create a working REST API pipeline.
+
+```text
+Please generate a REST API Source for Open Library API, as specified in `open_library-docs.yaml`
+use the search api and query harry potter books
+Place the code in open_library_pipeline.py and name the pipeline open_library_pipeline.
+If the file exists, use it as a starting point.
+Do not add or modify any other files.
+Use `.gemini` rules as a tutorial.
+After adding the endpoints, allow the user to run the pipeline with python open_library_pipeline.py and await further instructions.
+```
+
+#### Pipeline Configuration Summary
+Based on the provided specifications, the AI automatically configures the pipeline with:
+- **Base URL**: `https://openlibrary.org`
+- **Endpoint**: `/search.json`
+- **Query Parameters**: `q="harry potter"` and `limit=100`
+- **Data Selector**: `docs` (to extract the book array from the response object)
+- **Pagination**: Offset-based pagination with `total_path="numFound"` to automatically iterate through all result pages.
+
+#### Running the pipeline
+I run the pipeline with the code
+`uv run open_library_pipeline.py`
+
+Sccessfully. 
+Pipeline open_library_pipeline load step completed in 1.39 seconds
+1 load package(s) were loaded to destination duckdb and into dataset open_library_pipeline_dataset
+The duckdb destination used duckdb:////workspaces/data-engineering-zoomcamp/W1_data-ingestion/dlt-ai-workshop/open_library_pipeline.duckdb location to store data
+Load package 1772977180.2625802 is LOADED and contains no failed jobs
+
+
+### Step 7: Dashboard
+uv run dlt pipeline open_library_pipeline show
+
+It offers a comprenhensive visualization of everything
+We can directly query using the MCP tool. 
+

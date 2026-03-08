@@ -36,6 +36,12 @@ mkdir taxi-pipeline
 cd taxi-pipeline
 ```
 
+> [!TIP]
+> **My Answer:**
+>
+> **Steps taken:**
+> I have created the `taxi-pipeline` directory within `W1_data-ingestion` to house the homework project.
+
 Open this folder in Cursor (or your preferred agentic IDE).
 
 ### Step 2: Set Up the dlt MCP Server (If Not Already Done)
@@ -94,17 +100,41 @@ claude mcp add dlt -- uv run --with "dlt[duckdb]" --with "dlt-mcp[search]" pytho
 
 This enables the dlt MCP server, giving the AI access to dlt documentation, code examples, and your pipeline metadata.
 
+> [!TIP]
+> **My Answer:**
+> The dlt MCP server is already configured and active from the previous workshop demo. I can skip this step.
+
+
 ### Step 3: Install dlt
 
 ```bash
 pip install "dlt[workspace]"
 ```
 
+> [!TIP]
+> **My Answer:**
+>
+> **Steps taken:**
+> I initialized the project and installed `dlt` with workspace extras using `uv` for better dependency management:
+> ```bash
+> uv init
+> uv add "dlt[workspace]"
+> ```
+
 ### Step 4: Initialize the Project
 
 ```bash
 dlt init dlthub:taxi_pipeline duckdb
 ```
+
+> [!TIP]
+> **My Answer:**
+>
+> **Steps taken:**
+> I initialized the project with the following command:
+> ```bash
+> uv run dlt init dlthub:taxi_pipeline duckdb
+> ```
 
 You can name the project whatever you like. Since this API has no scaffold, the command will create:
 - The dlt project files
@@ -130,6 +160,10 @@ Place the code in taxi_pipeline.py and name the pipeline taxi_pipeline.
 Use @dlt rest api as a tutorial.
 ```
 
+> [!TIP]
+> **My Answer:**
+> I started by running the exact same prompt provided.
+
 ### Step 6: Run and Debug
 
 Run your pipeline and iterate with the agent until it works:
@@ -137,6 +171,31 @@ Run your pipeline and iterate with the agent until it works:
 ```bash
 python taxi_pipeline.py
 ```
+
+> [!TIP]
+> **My Answer:**
+>
+> **Inspection Step:**
+> The agent used `curl` to inspect the API structure:
+> ```bash
+> curl -L "https://us-central1-dlthub-analytics.cloudfunctions.net/data_engineering_zoomcamp_api?limit=1"
+> ```
+> This revealed that the API returns a flat JSON array `[...]` with fields like `Trip_Pickup_DateTime`, `Tip_Amt`, and `Payment_Type`.
+>
+> **Pipeline Implementation:**
+The agent created the `taxi_pipeline.py` script (Full path: `/workspaces/data-engineering-zoomcamp/W1_data-ingestion/taxi-pipeline/taxi_pipeline.py`) using the `rest_api_source` and I executed it:
+```bash
+uv run python taxi_pipeline.py
+```
+
+#### Debugging Log
+1. **Initial Scaffold**: The `dlt init` template created a generic structure but no specific API configuration.
+2. **Data Inspection**: Used `curl` to identify that the API returns a flat JSON array `[...]` rather than a nested object.
+3. **Empty Source Issue**: The first `rest_api_source` run returned 0 records because of incorrect default pagination starting at page 0.
+4. **Configuration Validation**: Encountered `DictValidationException` when trying to manually set an `initial_value` in the `paginator` config.
+5. **Pagination Test**: Confirmed via `curl` that the API uses 1-based indexing (`?page=1`) and returns exactly 1,000 records per page.
+6. **Switch to Generator**: To gain full control and logging, I switched from the `rest_api_source` helper to a manual `@dlt.resource` generator.
+7. **Successful Load**: The final generator correctly iterated through 10 pages until an empty page (0 records) was returned, loading 10,000 trips into DuckDB.
 
 ---
 
@@ -157,6 +216,37 @@ We challenge you to try out the different methods explored in the workshop when 
 - 2024-01-01 to 2024-02-01
 - 2024-06-01 to 2024-07-01
 
+> [!TIP]
+> **My Answer:**
+> 
+> **Thought:** I want to query the minimum pickup datetime and the maximum dropoff datetime to find the overall time range of the dataset.
+> 
+> **SQL Query:**
+> ```sql
+> SELECT MIN(trip_pickup_date_time), MAX(trip_dropoff_date_time) FROM taxi_data.taxi_trips;
+> ```
+> 
+> **Terminal Command:**
+> ```bash
+> uv run python -c "import duckdb; conn = duckdb.connect('taxi_pipeline.duckdb'); print(conn.execute('SELECT MIN(trip_pickup_date_time), MAX(trip_dropoff_date_time) FROM taxi_data.taxi_trips').fetchall())"
+> ```
+> 
+> **Terminal Output:**
+> ```text
+> [(datetime.datetime(2009, 6, 1, 11, 33, tzinfo=<StaticTzInfo 'Etc/UTC'>), datetime.datetime(2009, 7, 1, 0, 3, tzinfo=<StaticTzInfo 'Etc/UTC'>))]
+> ```
+> 
+> **Explanation:**
+> The terminal output shows a Python list containing a tuple with two `datetime` objects. 
+> - The first `datetime(2009, 6, 1, 11, 33...)` corresponds to the earliest trip pickup found in the dataset.
+> - The second `datetime(2009, 7, 1, 0, 3...)` corresponds to the latest trip dropoff found in the dataset.
+> 
+> Result:
+> - **Start date:** 2009-06-01
+> - **End date:** 2009-07-01
+> 
+> The answer is: **2009-06-01 to 2009-07-01**.
+
 ### Question 2: What proportion of trips are paid with credit card?
 
 - 16.66%
@@ -164,12 +254,63 @@ We challenge you to try out the different methods explored in the workshop when 
 - 36.66%
 - 46.66%
 
+> [!TIP]
+> **My Answer:**
+> 
+> **Thought:** I want to count the number of trips for each payment type and compare the 'Credit' count against the total number of trips (10,000) to calculate the proportion.
+> 
+> **SQL Query:**
+> ```sql
+> SELECT payment_type, COUNT(*) 
+> FROM taxi_data.taxi_trips 
+> GROUP BY 1;
+> ```
+> 
+> **Terminal Command:**
+> ```bash
+> uv run python -c "import duckdb; conn = duckdb.connect('taxi_pipeline.duckdb'); print(conn.execute('SELECT payment_type, COUNT(*) FROM taxi_data.taxi_trips GROUP BY 1').fetchall())"
+> ```
+> 
+> **Terminal Output:**
+> ```text
+> [('Credit', 2666), ('Cash', 97), ('Dispute', 1), ('No Charge', 1), ('CASH', 7235)]
+> ```
+> 
+> **Calculation:**
+> - Total records = 10,000
+> - Trips paid with credit card = 2,666
+> - Proportion = 2,666 / 10,000 = 0.2666 (or **26.66%**)
+> 
+> The answer is: **26.66%**.
+
 ### Question 3: What is the total amount of money generated in tips?
 
 - $4,063.41
 - $6,063.41
 - $8,063.41
 - $10,063.41
+
+> [!TIP]
+> **My Answer:**
+> 
+> **Thought:** I want to sum the values in the `tip_amt` column across all records to find the total amount of money generated in tips.
+> 
+> **SQL Query:**
+> ```sql
+> SELECT SUM(tip_amt) FROM taxi_data.taxi_trips;
+> ```
+> 
+> **Terminal Command:**
+> ```bash
+> uv run python -c "import duckdb; conn = duckdb.connect('taxi_pipeline.duckdb'); print(conn.execute('SELECT SUM(tip_amt) FROM taxi_data.taxi_trips').fetchall())"
+> ```
+> 
+> **Terminal Output:**
+> ```text
+> [(6063.410000000009,)]
+> ```
+> 
+> The answer is: **$6,063.41**.
 
 
 ### Resources
