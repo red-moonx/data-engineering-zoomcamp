@@ -21,16 +21,16 @@ There are two primary ways of processing data:
 
 Despite this, the advantages of batch processing often outweigh the disadvantages. In most companies, the vast majority of data processing remains batch-oriented due to its robustness and lower operational complexity compared to streaming.
 
-### 1.2. Technologies Used
+### Technologies Used
 *   **Python Scripts**: Primarily used for data ingestion and light orchestration.
 *   **SQL**: Used for data transformations (Dbt, BigQuery).
 *   **Spark**: Used for **large-scale data processing** and heavy-duty transformations that benefit from parallel computation.
 *   **Orchestration**: A typical workflow involves tools like **Airflow** to manage the pipeline dependencies and scheduling.
 
 
-## 2. Introduction to Apache Spark
+### 1.2. Introduction to Apache Spark
 
-### 2.1. What is Apache Spark?
+### 1.2.1. What is Apache Spark?
 Apache Spark is a powerful, open-source **distributed computing engine** designed for large-scale data processing. It operates across a **cluster** of machines to process data stored in architectures ranging from **Data Lakes** to **Data Warehouses**.
 
 **Key Features:**
@@ -38,7 +38,7 @@ Apache Spark is a powerful, open-source **distributed computing engine** designe
 *   **Unified Engine**: PySpark is versatile, supporting both **Batch Processing** and **Stream Processing**.
 *   **Performance**: Uses in-memory processing to stay significantly faster than traditional MapReduce jobs.
 
-### 2.2. When and Why to Use Spark?
+#### 1.2.2. When and Why to Use Spark?
 Spark is typically used when data resides in a **Data Lake** (e.g., S3 or GCS) in formats like **Parquet**. Spark extracts the data, processes it, and often writes the results back to the Data Lake.
 
 **Decision Framework: SQL vs. Spark**
@@ -48,7 +48,7 @@ Spark is typically used when data resides in a **Data Lake** (e.g., S3 or GCS) i
     *   You need specialized data processing (e.g., graph processing or advanced text manipulation).
     *   **Machine Learning**: Spark is the industry standard for training and applying models at scale.
 
-### 2.3. Typical Workflows
+#### 1.2.3. Typical Workflows
 A standard enterprise data pipeline often looks like this:
 1.  **Ingestion**: Raw data is landed in a **Data Lake**.
 2.  **SQL Layer**: Initial transformations (joins, filtering) are performed using SQL.
@@ -57,14 +57,14 @@ A standard enterprise data pipeline often looks like this:
 5.  **Inference**: Spark is used to apply a trained model to massive datasets (Inference), sending results back to the Data Lake and finally into a **Data Warehouse** for reporting.
 
 
-## 3. Installation 
+## 2. Installation 
 We are using **GitHub Codespaces** running **Ubuntu 24.04.3 LTS (Noble Numbat)**. Spark can be installed directly using Python via the `pyspark` package, which bundles the Spark binaries.
 
-### 3.1. Prerequisites
+### 2.1. Prerequisites
 - **Java**: Java 25 is pre-installed at `/usr/local/sdkman/candidates/java/current`.
 - **uv**: The modern Python package manager `uv` is recommended for managing dependencies.
 
-### 3.2. Installation Steps
+### 2.2. Installation Steps
 1.  **Initialize the Environment**:
     Navigate to the `06_batch/` folder and initialize a new `uv` project:
     ```bash
@@ -76,7 +76,7 @@ We are using **GitHub Codespaces** running **Ubuntu 24.04.3 LTS (Noble Numbat)**
     uv add pyspark
     ```
 
-### 3.3. Verification
+### 2.3. Verification
 Create a simple `test_spark.py` script to confirm Spark is working:
 ```python
 import pyspark
@@ -98,7 +98,7 @@ Run the validation:
 uv run python test_spark.py
 ```
 
-### 3.4. Test Results & Explanation
+### 2.4. Test Results & Explanation
 The script executed successfully with the following output:
 ```text
 Spark version: 4.1.1
@@ -140,7 +140,7 @@ os.environ["PATH"] = os.environ["JAVA_HOME"] + "/bin:" + os.environ["PATH"]
 **CRITICAL**: After running this cell, you **must restart the kernel** (using the circular arrow button in VS Code) and then run your cells again starting from the top.
 
 
-### 3.5. Jupyter Notebook Setup
+### 2.5. Jupyter Notebook Setup
 To use PySpark within Jupyter Notebooks in this Codespace, follow these steps to ensure the correct virtual environment is used:
 
 1.  **Install `ipykernel`**:
@@ -169,14 +169,38 @@ To use PySpark within Jupyter Notebooks in this Codespace, follow these steps to
     ```
     The output should be `4.1.1`.
  
-+## 4. Initial Test: 03_test.ipynb
-+The `03_test.ipynb` notebook serves as a "Hello World" for PySpark in this module. It verifies the environment by performing the following operations:
-+
-+1.  **Environment Check**: Confirms that Python can locate the `pyspark` libraries.
-+2.  **Spark Session Initialization**: Starts a local Spark cluster using `.master("local[*]")`, which utilizes all available CPU cores for parallel processing.
-+3.  **Data Ingestion**: Downloads the NYC Taxi Zone Lookup dataset (CSV) and loads it into a Spark DataFrame.
-+4.  **DataFrame Operations**: Uses `df.show()` to display the first 20 rows of the dataset, confirming the distributed computing engine is functioning.
-+5.  **Format Conversion**: Writes the DataFrame to **Parquet** format. This is a critical data engineering step, as Parquet is a columnar storage format optimized for Spark, providing better compression and performance than CSV.
-+
-+Successfully running this notebook confirms that the Spark cluster is healthy and the environment is ready for large-scale data processing.
+## 2.6. Initial Test: 03_test.ipynb
+The `03_test.ipynb` notebook serves as a "Hello World" for PySpark in this module. It verifies the environment by performing the following operations:
 
+1.  **Environment Check**: Confirms that Python can locate the `pyspark` libraries.
+2.  **Spark Session Initialization**: Starts a local Spark cluster using `.master("local[*]")`, which utilizes all available CPU cores for parallel processing.
+3.  **Data Ingestion**: Downloads the NYC Taxi Zone Lookup dataset (CSV) and loads it into a Spark DataFrame.
+4.  **DataFrame Operations**: Uses `df.show()` to display the first 20 rows of the dataset, confirming the distributed computing engine is functioning.
+5.  **Format Conversion**: Writes the DataFrame to **Parquet** format. This is a critical data engineering step, as Parquet is a columnar storage format optimized for Spark, providing better compression and performance than CSV.
+
+Successfully running this notebook confirms that the Spark cluster is healthy and the environment is ready for large-scale data processing.
+
+## 3. Spark SQL and DataFrames 
+
+### 3.1. First look at Spark/PySpark
+### 3.2. Spark DataFrames
+### 3.3. Preparing Yellow and Green Taxi Data
+### 3.4. SQL with Spark
+
+## 4. Spark internals
+
+### 4.1. Anatomy of a Spark Cluster
+### 4.2. GroupBy in Spark
+### 4.3. Joins in Spark
+
+## 5. Resilient Distributed Datasets
+
+### 5.1. Operations on Spark RDDs
+### 5.2. Spark RDD mapPartition
+
+## 6. Running Spark in the Cloud
+
+### 6.1. Connecting to Google Cloud Storage
+### 6.2. Creating a Local Spark Cluster
+### 6.3. Setting up a Dataproc Cluster
+### 6.4. Connecting Spark with BigQuery

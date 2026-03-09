@@ -210,4 +210,12 @@ __marimo__/
 .bruin.yml
 logs/runs
 logs/*.log
-logs/queriesduckdb.db
+logs/queries
+duckdb.db
+*.duckdb
+.dlt/secrets.toml
+
+
+# Data files
+06_batch/code/*.csv.gz
+06_batch/code/*.csv
