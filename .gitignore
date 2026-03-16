@@ -219,3 +219,9 @@ duckdb.db
 # Data files
 06_batch/code/*.csv.gz
 06_batch/code/*.csv
+**/data/
+*.parquet
+*.csv
+spark-warehouse/
+.ipynb_checkpoints/
+06_batch/handoff
