@@ -1,0 +1,30 @@
+# Handoff: Module 06 - Batch Processing (Spark)
+
+## 📌 Context
+The user has completed the core learning transition from raw CSV processing to Spark SQL and has reviewed the internal workings of Spark. All major taxi datasets for 2020 and 2021 (months 1-7) have been converted and saved in Parquet format.
+
+## 🛠️ Important Environment Notes
+- **Java Compatibility**: Spark in this Codespace requires **Java 21**. Always include the Java setup cell at the top of new notebooks:
+  ```python
+  import os
+  os.environ["JAVA_HOME"] = "/usr/local/sdkman/candidates/java/21.0.9-ms"
+  os.environ["PATH"] = os.environ["JAVA_HOME"] + "/bin:" + os.environ["PATH"]
+  ```
+- **Schema Evolution (Yellow 2021)**: The Yellow taxi data for 2021 has 23 columns (new `airport_fee`) compared to 2020.
+  - **Fix**: Use `.option("enforceSchema", "false")` when reading CSVs with `yellow_schema` to ignore extra columns without crashing.
+- **Python 3.13 Syntax**: Be careful with line continuation backslashes (`\`) followed by comments; it triggers a `SyntaxError`. Using parentheses `( ... )` for chaining is safer.
+
+## 🏃 Current Progress
+- **Section 3.3 (Data Prep)** ✅ Done — Yellow/Green 2020/2021 data re-downloaded and successfully converted to Parquet in `/data/pq`.
+- **Section 3.4 (SQL with Spark)** ✅ Done — Documented temporary views (`registerTempTable`), SQL aggregations, and the Catalyst Optimizer.
+- **Section 4 (Internals)** ✅ Done — Documented Cluster Anatomy (Driver/Executors), Shuffling, and Joins (Sort Merge vs Broadcast).
+- **Section 5 (RDDs)** ⏭️ **Skipped** — Documented the concept but skipped practical exercises as per user request to focus on DataFrames.
+- **Section 6 (Cloud)** 👀 **Reviewed** — User has reviewed the cloud configuration (GCS/Dataproc/BigQuery) but hasn't performed practical implementation yet.
+
+## 🗒️ Next Actions
+1. **Start the Homework**: The next task is the [Module 6 Homework](homework/README.md).
+   - Data source: `yellow_tripdata_2025-11.parquet` (Wget command is in the homework file).
+   - Goal: Answer Questions 1-6 using the skills learned (schema inference, repartitioning, filtering, and joining with zone lookups).
+2. **Space Management**: Every few steps, check disk space. If getting low, delete the `data/raw` folder as the Parquet files in `data/pq` are sufficient for all tasks.
+
+**Rest well! 🛌 Ready to crush the homework tomorrow. 🧗🚀**
