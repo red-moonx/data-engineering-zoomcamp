@@ -67,26 +67,40 @@ We use a `docker-compose.yml` file to manage our local infrastructure. For this 
 ### 1.7. Practical Setup
 Commands executed to start the infrastructure and prepare the environment:
 ```bash
-# 1. Start Redpanda and PostgreSQL in the background
+# 1. Start Initial Infrastructure (Redpanda & Postgres)
 docker compose up redpanda postgres -d
 
-# 2. Add the PostgreSQL connector to our environment
+# 2. Add the PostgreSQL connector to our local environment
 uv add psycopg2-binary
+
+# 3. Build & Start the Flink Cluster
+# First, ensure the 'src' folder exists for the Volume Mount
+mkdir -p src 
+
+# Build the hybrid Java/Python image
+docker compose build
+
+# Bring up the JobManager and TaskManager
+docker compose up -d
 ```
 
 > [!TIP]
 > **Patience is Key**: After running `docker compose up`, Redpanda may take 15-20 seconds to fully initialize its Kafka API. If you get a `ValueError: Invalid file object: None` in your notebook immediately after starting, just wait a few moments and try running the cell again.
 
-# Verify logs if needed
-docker compose logs redpanda -f
+### 1.8. Verification
+Once the cluster is up, you can verify the status of the services:
+```bash
+docker ps
 ```
+
+You should see 4 containers running: `jobmanager`, `taskmanager`, `redpanda`, and `postgres`. You can also access the **Flink Web UI** at `http://localhost:8081` to see the available task slots.
 
 To interact with the database, we use **pgcli**, a command-line interface for Postgres with auto-completion and syntax highlighting. We run it using **`uvx`**, which executes the tool in a temporary, isolated environment without needing to install it globally:
 ```bash
 uvx pgcli -h localhost -p 5432 -U postgres -d postgres
 ```
 
-### 1.8. Producers and Consumers
+### 1.9. Producers and Consumers
 To interact with our streaming cluster, we use two main components:
 - **Producer**: An application (in our case, a Python script) that takes data—like our Green Taxi records—and sends it as a stream of events into a specific RedPanda **Topic**. Something that writes to this kfka stream.
 - **Consumer**: An application that subscribes to a topic to read and process the incoming stream of events. Consumers can be used for real-time dashboards, database ingestion, or further data transformations. Something that is reading from this Kafka stream. 
@@ -103,7 +117,7 @@ Then we need to **register** the kernel so it's available in the Jupyter interfa
 
 uv run python -m ipykernel install --user --name 07-streaming --display-name "Python 3.12 (07-streaming)"
 
-### 1.9. Data Modeling & Serialization
+### 1.10. Data Modeling & Serialization
 
 To ensure consistent data structures across our producers and consumers, we define our events using Python **Dataclasses**. An event represents a single occurrence of an action—in our case, a recorded taxi ride.
 
@@ -272,16 +286,79 @@ Grouping continuous data into discrete blocks is essential for analytics. Flink 
 
 ---
 
-## 🛡️ Chapter 4: Aggregation & The "Safety Net"
+## 🛠️ Chapter 5: Advanced Flink - Windowed Aggregation
 
-### 4.1 Stateful Aggregations
-Flink allows us to perform SQL-like aggregations (`SUM`, `COUNT`, `AVG`) directly on the stream. Because Flink is stateful, it remembers the running total for every active window in its internal memory.
+While the "Pass-Through" job moves data, the **Aggregation Job** is where Flink really shines by performing real-time math on your streams.
 
-### 4.2 The Upsert Safety Net (Primary Keys)
-When using a PostgreSQL sink, we define a **Primary Key** on the window start and location. This enables **Upsert** (Update or Insert) behavior:
-- If a late event arrives *after* a window has already been results-emitted, Flink sends a correction.
-- The database updates the existing row instead of creating a duplicate.
-- This ensures eventual consistency even with highly out-of-order data.
+### 5.1 The "Tumbling Window" Concept
+Think of a Tumbling Window as a series of **non-overlapping timed buckets**. 
+-   Each bucket (e.g., 1 hour) collects every ride that happens within that specific hour.
+-   When the hour ends, the bucket "tumbles" away, Flink calculates the totals (sum of revenue, count of trips), and a single summary row is sent to the database.
+
+### 5.2 The "Relay Race" Step-by-Step (Bear in Mind!)
+When you run your pipeline, here is exactly what is happening for a single ride (e.g., **Ride #43**):
+
+1.  **The Origin (Notebook)**: Your `producer.ipynb` reads Ride #43 from a Parquet file.
+2.  **The Hand-off (Producer API)**: The notebook sends the data as bytes to **Redpanda** on port `9092`.
+3.  **The Buffer (Redpanda)**: Redpanda stores the bytes in the `rides` topic. It doesn't process them; it just holds them safely.
+4.  **The Engine (Flink)**: Flink’s `aggregation_job.py` is always "listening." It pulls Ride #43, checks its timestamp, and places it into the correct "1-Hour Bucket."
+5.  **The Trigger (Watermark)**: Once Flink is sure that no more data for that hour is coming (based on the 5-second watermark), it closes the bucket.
+6.  **The Destination (Postgres)**: Flink sends the final count and revenue for that entire hour to the `processed_events_aggregated` table.
+
+### 5.3 Technical Implementation
+
+#### The Aggregation Table (Postgres)
+This table uses a **Composite Primary Key** to enable "Upserts." If a late ride arrives after the bucket has already been reported, Flink will send an "update" to correct the total in Postgres.
+
+```sql
+CREATE TABLE processed_events_aggregated (
+    window_start TIMESTAMP,
+    PULocationID INTEGER,
+    num_trips BIGINT,
+    total_revenue DOUBLE PRECISION,
+    PRIMARY KEY (window_start, PULocationID)
+);
+```
+
+#### The Aggregation Script (`aggregation_job.py`)
+Key features of this job include:
+-   **Watermarks**: Tells Flink to wait 5 seconds for "straggler" events before closing a window.
+-   **TUMBLE Function**: Groups the data into fixed 1-hour intervals based on the pickup location.
+
+```bash
+# To run the aggregation job:
+docker compose exec jobmanager ./bin/flink run \
+    -py /opt/src/job/aggregation_job.py \
+    --pyFiles /opt/src -d
+```
+
+### 5.4 Handling the "Real World" (Late Events)
+In a real production environment, data rarely arrives in perfect order. To test this, we used **`producer_realtime.py`**, which intentionally simulates network delays.
+
+#### 🌊 The Watermark "Patience" Window
+Our script is configured with a **5-second Watermark**.
+-   **On Time / Minor Delay (< 5s)**: Data is included in the window calculation immediately.
+-   **Late Arrival (> 5s)**: The window has already been "closed" and reported to Postgres.
+
+#### 🛠️ The Upsert Correction
+When a "Late" event (like a 10-second delay) arrives, Flink doesn't ignore it. 
+1.  Flink calculates the **new, corrected total** for that past hour.
+2.  It sends an **UPDATE** command to Postgres using the **Composite Primary Key** (`window_start`, `PULocationID`).
+3.  The database row is updated in-place, ensuring your dashboard is always 100% accurate eventually!
+
+### 📊 Verifying the Results
+Run this query in `pgcli` to see your live hourly taxi analytics:
+
+```sql
+SELECT 
+    window_start, 
+    count(*) as unique_locations, 
+    sum(num_trips) as total_trips,
+    round(sum(total_revenue)::numeric, 2) as hourly_revenue
+FROM processed_events_aggregated
+GROUP BY window_start
+ORDER BY window_start;
+```
 
 ---
 
@@ -296,9 +373,9 @@ Streaming has a high operational cost (it runs 24/7 and needs monitoring). Befor
 ## 🗒️ Next Actions
 - [x] Setup Red Panda/Kafka cluster.
 - [x] Implement Python Producer for Taxi Data.
-- [ ] Build and Start the Flink/PyFlink Cluster.
-- [ ] Run the Pass-Through Job.
-- [ ] Run the Windowed Aggregation Job.
+- [x] Build and Start the Flink/PyFlink Cluster.
+- [x] Run the Pass-Through Job.
+- [x] Run the Windowed Aggregation Job.
 
 ---
 *The journey ends with real-time mastery!* 🌊⚡

@@ -5,27 +5,32 @@ We are working on **Module 7: Streaming**. The environment is fully initialized 
 
 ## Current Progress
 - **Infrastructure:**
-    - Redpanda and PostgreSQL are configured and running in Docker.
-    - Flink `Dockerfile`, `config`, and `pyproject` files have been downloaded via `wget`.
-- **Database:** `processed_events` table has been created in Postgres via `pgcli`.
-- **Connectivity:** `psycopg2-binary` installed to allow Python → Postgres communication.
-- **Documentation:** `README.md` is fully updated with deep dives into:
-    - Serialization (Object → Dict → JSON → Bytes).
-    - Flink vs. Spark (Native vs. Micro-batch).
-    - Checkpointing & Fault Tolerance.
-    - Watermarks (Patience Fix) and Window types (Tumbling/Sliding/Session).
-    - Upsert logic with Primary Keys in Postgres.
-    - Infrastructure explanation for the hybrid `Dockerfile.flink`.
+    - Redpanda and PostgreSQL are up and running.
+    - Flink Cluster is **Healthy and Operational**.
+    - **Current State:** 07_streaming-jobmanager-1 is running with 1 active job (`pass_through_job.py`).
+- **Development:**
+    - `src/job/pass_through_job.py` created and successfully submitted to the cluster.
+    - Verified the Flink UI on port 8081 shows the job graph and 12/15 available slots.
+- **Documentation:**
+    - `README.md` is fully updated with the Flink "Smart Tunnel" concept, Docker architecture (Brain vs Muscle), and the Practical Setup guide.
 
 ## Completed Actions
-1. Verified `models.py` logic and documented the "middle-man" dictionary role.
-2. Successfully ran `SELECT COUNT(1)` on the database (confirmed 0 rows, ready for data).
-3. Prepared the Flink custom image recipe.
-4. Comprehensive update to `README.md` merging theory and implementation.
+1. **Architecture Deep Dive:** Mastered the role of "Connectors" (Java JAR bridges) and why we use a hybrid Dockerfile.
+2. **Infrastructure Launch:** Built the custom `pyflink-workshop` image and launched the 4-container stack.
+3. **First Job Submission:** Submitted the Pass-Through job using `docker compose exec`.
 
-## Next Steps for Later
-1. **Build Flink:** Run `docker compose build` to create the custom PyFlink image.
-2. **Start Flink:** Run `docker compose up -d` to bring up the JobManager and TaskManager.
-3. **Trigger Stream:** Run `producer.ipynb` to start sending taxi events.
-4. **Verify Flow:** Run `consumer_db.ipynb` and check the table count again in `pgcli`.
-5. **Flink Development:** Transition to `pass_through_job.py` and `aggregation_job.py`.
+## Next Steps for Tomorrow
+### 🌅 Start-of-Day Commands
+Run these to wake up the factory:
+```bash
+# 1. Start the machines
+docker compose up -d
+
+# 2. Re-submit the smart tunnel (since the cluster restarts fresh)
+docker compose exec jobmanager ./bin/flink run -py /opt/src/job/pass_through_job.py -d
+```
+
+### 🎯 Objective
+1. **Trigger Stream:** Run `producer.ipynb` to send taxi data into Redpanda.
+2. **Verify Database:** Check `processed_events` in Postgres.
+3. **Advanced Flink:** Implement `aggregation_job.py` for windowed analytics.
