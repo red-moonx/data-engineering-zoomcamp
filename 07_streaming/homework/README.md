@@ -375,7 +375,7 @@ How many trips were in the longest session?
 >            74 |        71 | 2025-10-22 06:58:31 | 2025-10-22 08:25:04
 > (3 rows)
 > ```
-> The answer is **81**. You've completed Question 5!
+> The answer is **81**.
 > 
 
 ## Question 6. Tumbling window - largest tip
@@ -423,4 +423,4 @@ Which hour had the highest total tip amount?
 >  2025-10-16 18:00:00 | 510.8599999999999
 > (1 row)
 > ```
-> The answer is **2025-10-16 18:00:00**. We've completed the homework!
+> The answer is **2025-10-16 18:00:00**. 
