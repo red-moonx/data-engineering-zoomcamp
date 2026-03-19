@@ -1,0 +1,56 @@
+]633;D;2]633;P;Cwd=/workspaces/data-engineering-zoomcamp/07_streaming/homework]633;E;docker exec -it homework-postgres-1 psql -U postgres -d postgres -c " SELECT PULocationID, num_trips, window_start, window_end FROM processed_session_counts ORDER BY num_trips DESC LIMIT 3\x3b";dcba6e69-b6ca-4ede-a5e4-dd3f9e3a12ea]633;C[?1049h[22;0;0t[24;1H[?1h= pulocationid | num_trips |    window_start     |     window_end      
+--------------+-----------+---------------------+---------------------
+           74 |        81 | 2025-10-08 06:46:14 | 2025-10-08 08:27:40
+           74 |        72 | 2025-10-01 06:52:23 | 2025-10-01 08:23:33
+           74 |        71 | 2025-10-22 06:58:31 | 2025-10-22 08:25:04
+(3 rows)
+
+[7m(END)[27m[K[K[K[7m(END)[27m[K[K[K[7m(END)[27m[K[K[K[7m(END)[27m[K[H[2J[H[H[2J[H pulocationid | num_trips |    window_start     |     window_end      
+--------------+-----------+---------------------+---------------------
+           74 |        81 | 2025-10-08 06:46:14 | 2025-10-08 08:27:40
+           74 |        72 | 2025-10-01 06:52:23 | 2025-10-01 08:23:33
+           74 |        71 | 2025-10-22 06:58:31 | 2025-10-22 08:25:04
+(3 rows)
+
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[7m(END)[27m[KCancel request sent
+[H[2J[H[H[2J[H pulocationid | num_trips |    window_start     |     window_end      
+--------------+-----------+---------------------+---------------------
+           74 |        81 | 2025-10-08 06:46:14 | 2025-10-08 08:27:40
+           74 |        72 | 2025-10-01 06:52:23 | 2025-10-01 08:23:33
+           74 |        71 | 2025-10-22 06:58:31 | 2025-10-22 08:25:04
+(3 rows)
+
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[7m(END)[27m[KCancel request sent
+[K[K[7m(END)[27m[K[K[K[7m(END)[27m[K
